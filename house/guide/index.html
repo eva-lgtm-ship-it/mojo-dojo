@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Alpha House · Kids list</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/mojo/mojo.css">
+<style>
+  .wrap{max-width:1100px;margin:0 auto;padding:0 20px 40px}
+  .sheet{background:#fff;color:var(--ink);border-radius:18px;padding:8px 18px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:860px}
+  th{text-align:left;font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--medium);padding:12px 8px}
+  td{border-top:1px solid var(--line);padding:10px 8px;vertical-align:top;font-weight:600}
+  td input,td textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 9px;color:var(--ink);font-weight:600;background:#fff}
+  td textarea{min-height:42px;resize:vertical}
+  .who b{display:block;font-weight:900;font-size:16px}
+  .who span{font-size:12px;color:var(--muted)}
+  .st{display:inline-block;font-weight:900;font-size:11px;letter-spacing:.1em;padding:3px 8px;border-radius:6px}
+  .st.ok{background:#e1f6ff;color:var(--medium)}
+  .st.check{background:var(--accent);color:var(--navy)}
+  .st.missing{background:#ffe1e1;color:#9b1c1c}
+  .intro{font-weight:600;color:var(--pale);line-height:1.5;margin:4px 0 16px;max-width:760px}
+  .tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { esc, kidName, supa, session, isGuide, signInCard, connectLink } from '/mojo/app.js';
+import { toast } from '/mojo/ui.js';
+
+const DOMAIN = 'alpha.school';
+const root = document.getElementById('app');
+let sb, kids = [];
+
+(async function main() {
+  sb = await supa(root);
+  const s = await session(sb);
+  if (!s) return signInCard(root, sb, 'Guides only. Use your Alpha School Google account.');
+  if (!(await isGuide(sb))) {
+    root.innerHTML = `<div class="setup"><h2>Guides only</h2><p>${esc(s.user.email)} isn't on the guide list.</p></div>`;
+    return;
+  }
+  await load();
+})().catch(e => { root.innerHTML = `<div class="setup"><h2>Something went wrong</h2><p>${esc(e.message || e)}</p></div>`; });
+
+async function load() {
+  const { data, error } = await sb.from('kids').select('*').eq('active', true);
+  if (error) throw error;
+  kids = data.sort((a, b) => kidName(a).localeCompare(kidName(b)));
+  render();
+}
+
+const status = k => !k.email ? ['missing', 'MISSING'] : k.email_source === 'check' ? ['check', 'CHECK'] : ['ok', 'OK'];
+
+/** first.last@alpha.school from the Timeback name — always marked CHECK. */
+function guessEmail(k) {
+  const parts = (k.timeback_name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z\s-]/g, '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return null;
+  return `${parts[0]}.${parts[parts.length - 1]}@${DOMAIN}`;
+}
+
+function render() {
+  const missing = kids.filter(k => !k.email).length;
+  root.innerHTML = `
+    <header class="top"><img class="logo" src="/mojo/assets/alpha-school-logo-white.svg" alt="Alpha School">
+      <div class="title"><small>Alpha House</small>Kids list</div><div class="grow"></div>
+      <a class="btn" href="/mojo">← Mojo Dojo board</a></header>
+    <main class="wrap">
+      <p class="intro">This list decides who can sign in to Alpha House. Each email must match the Google account
+        the kid uses. <b>CHECK</b> means the email was built from the kid's name, so confirm it.
+        <b>MISSING</b> means that kid can't sign in yet. Focus lines and fun facts show on the kid's page right away.</p>
+      <div class="tools">
+        <button class="btn primary" id="copyLink">Copy kid sign-in link</button>
+        ${missing ? `<button class="btn" id="fill">Build ${missing} missing email${missing === 1 ? '' : 's'} from names</button>` : ''}
+      </div>
+      <div class="sheet"><table>
+        <thead><tr><th style="width:18%">Kid</th><th style="width:26%">School email</th><th style="width:30%">My focus</th><th>Fun fact</th></tr></thead>
+        <tbody>${kids.map(k => { const [cls, label] = status(k); return `
+          <tr data-id="${esc(k.id)}">
+            <td class="who"><b>${esc(kidName(k))}</b><span>${esc(k.timeback_name || '')}${k.hidden ? ' · hidden on board' : ''}</span></td>
+            <td><input type="email" data-f="email" value="${esc(k.email || '')}" placeholder="name@${DOMAIN}" aria-label="School email">
+              <div style="margin-top:6px;display:flex;gap:6px;align-items:center"><span class="st ${cls}">${label}</span>
+              ${cls === 'check' ? '<button class="btn small" style="background:var(--pale);color:var(--navy)" data-ok>Looks right</button>' : ''}</div></td>
+            <td><textarea data-f="focus" aria-label="My focus">${esc(k.focus || '')}</textarea></td>
+            <td><textarea data-f="fun_fact" aria-label="Fun fact">${esc(k.fun_fact || '')}</textarea></td>
+          </tr>`; }).join('') || '<tr><td colspan="4">Kids appear after the first sync on the Mojo Dojo board.</td></tr>'}
+        </tbody></table></div>
+    </main>`;
+
+  root.querySelector('#copyLink').onclick = async () => {
+    const link = connectLink('/house');
+    try { await navigator.clipboard.writeText(link); toast('Copied. Put it on the L1 Links board; kids open it once per device.'); }
+    catch { prompt('Copy this link:', link); }
+  };
+  const fill = root.querySelector('#fill');
+  if (fill) fill.onclick = async () => {
+    for (const k of kids.filter(x => !x.email)) {
+      const e = guessEmail(k);
+      if (e) await save(k.id, { email: e, email_source: 'check' }, false);
+    }
+    await load();
+  };
+  root.querySelectorAll('tr[data-id]').forEach(tr => {
+    const id = tr.dataset.id;
+    tr.querySelector('[data-f=email]').onchange = async e => {
+      const v = e.target.value.trim().toLowerCase();
+      if (v && !v.endsWith('@' + DOMAIN) && !confirm(`${v} isn't an @${DOMAIN} address. Save anyway?`)) return render();
+      await save(id, { email: v || null, email_source: v ? 'manual' : 'missing' });
+    };
+    tr.querySelectorAll('textarea').forEach(t => t.onchange = () => save(id, { [t.dataset.f]: t.value.trim() || null }, false));
+    const ok = tr.querySelector('[data-ok]'); if (ok) ok.onclick = () => save(id, { email_source: 'manual' });
+  });
+}
+
+async function save(id, patch, redraw = true) {
+  const { error } = await sb.from('kids').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) { toast(/duplicate|unique/i.test(error.message) ? 'Another kid already has that email.' : 'Could not save: ' + error.message); return; }
+  Object.assign(kids.find(k => k.id === id), patch);
+  toast('Saved');
+  if (redraw) render();
+}
+</script>
+</body>
+</html>

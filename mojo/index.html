@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mojo Dojo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/mojo/mojo.css">
+</head>
+<body>
+<div id="app"></div>
+<dialog id="dlg"><div class="panel" id="dlgBody"></div><div class="closebar"><button class="btn" id="dlgClose">Done</button></div></dialog>
+<aside class="drawer" id="drawer" aria-label="Guide settings"></aside>
+
+<script type="module">
+import { RULES, today, weekStartOf, addDays, shortDay, weekCards, buildKidWeek, pizzaStatus,
+  rulesInWords, esc, kidName, supa, session, isGuide, loadWeek, signInCard, forgetConfig, SUBJECT_ORDER }
+  from '/mojo/app.js';
+import { cardHtml, dayDetailHtml, smoothieHtml, funFridayHtml, weekXpHtml, toast } from '/mojo/ui.js';
+
+const TIMEBACK = 'https://alpha.timeback.com';
+const root = document.getElementById('app');
+const dlg = document.getElementById('dlg');
+const dlgBody = document.getElementById('dlgBody');
+const drawer = document.getElementById('drawer');
+document.getElementById('dlgClose').onclick = () => dlg.close();
+
+let sb, data, start = weekStartOf(today()), weeks = {}, openDay = null;
+
+/* ---------- start up ---------- */
+(async function main() {
+  sb = await supa(root);
+  const s = await session(sb);
+  if (!s) return signInCard(root, sb, 'Guides only. Use your Alpha School Google account.');
+  if (!(await isGuide(sb))) {
+    root.innerHTML = `<div class="setup"><h2>Not on the guide list</h2>
+      <p>${esc(s.user.email)} isn't a Mojo Dojo guide yet. Ask whoever set up the board to add you.</p>
+      <button class="btn primary" id="out">Sign out</button></div>`;
+    root.querySelector('#out').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+    return;
+  }
+  await refresh();
+  setInterval(() => { if (!dlg.open && !drawer.classList.contains('open')) refresh(); }, RULES.BOARD_REFRESH_MS);
+  window.addEventListener('message', onSyncMessage);
+})().catch(fail);
+
+function fail(e) {
+  console.error(e);
+  root.innerHTML = `<div class="setup"><h2>Something went wrong</h2><p>${esc(e.message || e)}</p>
+    <button class="btn primary" onclick="location.reload()">Try again</button>
+    <button class="btn" id="forget">Re-enter Supabase connection</button></div>`;
+  root.querySelector('#forget').onclick = () => { forgetConfig(); location.reload(); };
+}
+
+async function refresh() {
+  try { data = await loadWeek(sb, start); render(); }
+  catch (e) { fail(e); }
+}
+
+/* ---------- compute ---------- */
+function kidsOnBoard() {
+  return data.kids.filter(k => !k.hidden).sort((a, b) => kidName(a).localeCompare(kidName(b)));
+}
+function computeWeeks() {
+  const t = today();
+  weeks = {};
+  for (const k of data.kids) {
+    weeks[k.id] = buildKidWeek({
+      kid: k,
+      days: data.days.filter(d => d.kid_id === k.id),
+      flags: data.flags.filter(f => f.kid_id === k.id),
+      classDays: data.classDays, start, todayStr: t,
+    });
+  }
+}
+
+/* ---------- draw the board ---------- */
+function render() {
+  computeWeeks();
+  const kids = kidsOnBoard();
+  const cards = weekCards(start);
+  const classBy = Object.fromEntries(data.classDays.map(c => [c.day, c]));
+  const smoothies = kids.filter(k => weeks[k.id].smoothie.status === 'won').length;
+  const smoothieAlive = kids.filter(k => weeks[k.id].smoothie.status === 'alive').length;
+  const fun = kids.filter(k => weeks[k.id].funFriday.status === 'won').length;
+  const pizza = pizzaStatus(kids.map(k => weeks[k.id].weekXp));
+  const last = data.lastSync ? new Date(data.lastSync.ran_at) : null;
+  const stale = !last || (Date.now() - last) / 36e5 > RULES.STALE_AFTER_HOURS;
+  const isThisWeek = start === weekStartOf(today());
+
+  root.innerHTML = `
+    <header class="top">
+      <img class="logo" src="/mojo/assets/alpha-school-logo-white.svg" alt="Alpha School">
+      <div class="title"><small>${esc((data.settings.timeback_class && data.settings.timeback_class.title) || 'My class')}</small>Mojo Dojo</div>
+      <div class="grow"></div>
+      <div class="weeknav">
+        <button class="btn small" id="prev" aria-label="Previous week">‹</button>
+        <span>${esc(shortDay(start))} – ${esc(shortDay(addDays(start, 6)))}</span>
+        <button class="btn small" id="next" aria-label="Next week">›</button>
+        ${isThisWeek ? '' : '<button class="btn small" id="now">This week</button>'}
+      </div>
+      <button class="btn primary" id="sync">Sync</button>
+      <button class="btn" id="gear" aria-label="Settings">⚙</button>
+    </header>
+    <div class="chips">
+      <span class="chip ${smoothies ? 'win' : ''}">Smoothies <b>${smoothies}</b>${smoothieAlive ? ` <span>+${smoothieAlive} still going</span>` : ''}</span>
+      <span class="chip ${fun ? 'win' : ''}">Fun Friday <b>${fun}</b></span>
+      <span class="chip ${pizza.won ? 'win' : ''}">Pizza <b>${pizza.done}/${pizza.total}</b> at ${RULES.PIZZA_WEEK_XP} XP</span>
+      <span class="chip ${stale ? 'stale' : ''}">${last ? `Synced ${esc(last.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}` : 'Never synced'}</span>
+    </div>
+    <main class="board">
+      <div class="grid" style="grid-template-columns:170px repeat(${cards.length},minmax(110px,1fr)) repeat(3,112px)">
+        <div class="head">Kid</div>
+        ${cards.map(c => {
+          const ns = classBy[c.date] && classBy[c.date].no_school;
+          return `<button class="head dayhead ${ns ? 'noschool' : ''}" data-head="${c.date}"
+            title="Tap to ${ns ? 'undo' : 'mark'} no school">${esc(shortDay(c.date))}${c.covers.length > 1 ? ' +wknd' : ''}${ns ? ' · no school' : ''}</button>`;
+        }).join('')}
+        <div class="head">Smoothie</div><div class="head">Fun Friday</div><div class="head">Week XP</div>
+        ${kids.length ? kids.map(k => {
+          const w = weeks[k.id];
+          return `<div class="kid">${esc(kidName(k))}</div>
+            ${w.cards.map(c => cardHtml(c, { kidId: k.id })).join('')}
+            ${smoothieHtml(w)}${funFridayHtml(w)}${weekXpHtml(w)}`;
+        }).join('') : `<div style="grid-column:1/-1" class="chip">No kids yet. Press Sync to bring your class in from Timeback.</div>`}
+      </div>
+    </main>`;
+
+  root.querySelector('#prev').onclick = () => { start = addDays(start, -7); refresh(); };
+  root.querySelector('#next').onclick = () => { start = addDays(start, 7); refresh(); };
+  const now = root.querySelector('#now'); if (now) now.onclick = () => { start = weekStartOf(today()); refresh(); };
+  root.querySelector('#sync').onclick = startSync;
+  root.querySelector('#gear').onclick = openDrawer;
+  root.querySelectorAll('button.cell').forEach(b => b.onclick = () => showDay(b.dataset.kid, b.dataset.day));
+  root.querySelectorAll('[data-head]').forEach(b => b.onclick = () => toggleNoSchool(b.dataset.head));
+  if (dlg.open && openDay) showDay(openDay.kid, openDay.day);
+}
+
+/* ---------- writes ---------- */
+async function setFlag(kidId, day, patch) {
+  const cur = data.flags.find(f => f.kid_id === kidId && f.day === day) || {};
+  const row = { pass: false, test: false, excused: false, apps_out: [], call_time: null,
+    ...strip(cur), ...patch, kid_id: kidId, day, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('day_flags').upsert(row, { onConflict: 'kid_id,day' });
+  if (error) return toast('Could not save: ' + error.message);
+  await refresh();
+}
+async function setClassDay(day, patch) {
+  const cur = data.classDays.find(c => c.day === day) || {};
+  const row = { no_school: false, apps_out: [], ...strip(cur), ...patch, day, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('class_days').upsert(row, { onConflict: 'day' });
+  if (error) return toast('Could not save: ' + error.message);
+  await refresh();
+}
+const strip = o => { const { updated_at, ...rest } = o; return rest; };
+
+async function toggleNoSchool(day) {
+  const ns = !!(data.classDays.find(c => c.day === day) || {}).no_school;
+  if (!confirm(ns ? `Undo no school on ${shortDay(day)}?` : `Mark ${shortDay(day)} as no school for everyone?`)) return;
+  await setClassDay(day, { no_school: !ns });
+}
+
+/* ---------- tap a day ---------- */
+function showDay(kidId, day) {
+  const kid = data.kids.find(k => k.id === kidId);
+  const card = weeks[kidId] && weeks[kidId].cards.find(c => c.date === day);
+  if (!kid || !card) return;
+  openDay = { kid: kidId, day };
+  const classOut = (data.classDays.find(c => c.day === day) || {}).apps_out || [];
+  const subjects = Object.keys(kid.goals || {}).filter(s => Number(kid.goals[s]) > 0)
+    .sort((a, b) => SUBJECT_ORDER.indexOf(a) - SUBJECT_ORDER.indexOf(b));
+
+  dlgBody.innerHTML = dayDetailHtml(card, kidName(kid)) + `
+    <div class="actions">
+      <button class="btn ${card.pass ? 'on' : ''}" data-act="pass">Day pass</button>
+      <button class="btn ${card.test && !card.autoTest ? 'on' : ''}" data-act="test">${card.autoTest ? 'Test (from Timeback)' : 'Test day'}</button>
+      <button class="btn ${card.excused ? 'on' : ''}" data-act="excused">Excused</button>
+    </div>
+    <h3 style="font-size:14px;letter-spacing:.1em">App out</h3>
+    <div class="ringlist">${subjects.map(s => {
+      const kidOut = card.kidAppsOut.includes(s), allOut = classOut.includes(s);
+      return `<div class="ringrow ${kidOut || allOut ? 'out' : ''}">
+        <span>${esc(s)}<br><span class="meta">${allOut ? 'out for everyone' : kidOut ? 'out for this kid' : 'counts'}</span></span>
+        ${kidOut || allOut
+          ? `<button class="btn small" data-back="${esc(s)}">Back on</button><span></span>`
+          : `<button class="btn small" data-out="${esc(s)}">This kid</button><button class="btn small" data-all="${esc(s)}">All</button>`}
+      </div>`; }).join('') || '<p class="sub">No subject goals yet. Sync first.</p>'}
+    </div>
+    <div class="field"><label for="call">Coaching call (shows on the kid's page)</label>
+      <div class="actions"><input id="call" placeholder="2:00" value="${esc(card.callTime || '')}" style="width:120px">
+      <button class="btn primary" data-act="call">Save call</button>
+      ${card.callTime ? '<button class="btn" data-act="nocall">Remove</button>' : ''}</div></div>`;
+
+  const flag = data.flags.find(f => f.kid_id === kidId && f.day === day) || {};
+  dlgBody.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
+    const a = b.dataset.act;
+    if (a === 'pass' || a === 'excused') return setFlag(kidId, day, { [a]: !flag[a] });
+    if (a === 'test') return setFlag(kidId, day, { test: !flag.test });
+    if (a === 'call') return setFlag(kidId, day, { call_time: dlgBody.querySelector('#call').value.trim() || null });
+    if (a === 'nocall') return setFlag(kidId, day, { call_time: null });
+  });
+  dlgBody.querySelectorAll('[data-out]').forEach(b => b.onclick = () =>
+    setFlag(kidId, day, { apps_out: [...new Set([...(flag.apps_out || []), b.dataset.out])] }));
+  dlgBody.querySelectorAll('[data-all]').forEach(b => b.onclick = () =>
+    setClassDay(day, { apps_out: [...new Set([...classOut, b.dataset.all])] }));
+  dlgBody.querySelectorAll('[data-back]').forEach(b => b.onclick = async () => {
+    const s = b.dataset.back;
+    if ((flag.apps_out || []).includes(s)) await setFlag(kidId, day, { apps_out: flag.apps_out.filter(x => x !== s) });
+    if (classOut.includes(s)) await setClassDay(day, { apps_out: classOut.filter(x => x !== s) });
+  });
+  if (!dlg.open) dlg.showModal();
+}
+dlg.addEventListener('close', () => { openDay = null; });
+
+/* ---------- Timeback sync ---------- */
+let helloTimer = null;
+function startSync() {
+  const tab = window.open(TIMEBACK + '/app', 'mojo-timeback');
+  if (!tab) return toast('Allow pop-ups for this page, then press Sync again.');
+  const match = data.settings.class_match || '';
+  clearInterval(helloTimer);
+  const until = Date.now() + 10 * 60_000;
+  helloTimer = setInterval(() => {
+    if (tab.closed || Date.now() > until) return clearInterval(helloTimer);
+    try { tab.postMessage({ type: 'mojo-hello', classMatch: match }, TIMEBACK); } catch {}
+  }, 1000);
+  toast('Timeback opened. When it has loaded, click your “Mojo sync” bookmark there.', 6000);
+}
+async function onSyncMessage(e) {
+  if (e.origin !== TIMEBACK || !e.data || e.data.type !== 'mojo-sync') return;
+  clearInterval(helloTimer);
+  await runSync(e.data.payload);
+}
+async function runSync(payload) {
+  const { data: res, error } = await sb.rpc('mojo_sync', { payload });
+  if (error) return toast('Sync failed: ' + error.message, 6000);
+  toast(`Synced ${res.kids} kids, ${res.days} kid-days.`);
+  await refresh();
+  if (drawer.classList.contains('open')) openDrawer();
+}
+
+/* ---------- settings drawer ---------- */
+async function openDrawer() {
+  const last = data.lastSync;
+  const stale = !last || (Date.now() - new Date(last.ran_at)) / 36e5 > RULES.STALE_AFTER_HOURS;
+  const kids = [...data.kids].sort((a, b) => kidName(a).localeCompare(kidName(b)));
+  drawer.innerHTML = `
+    <section style="display:flex;justify-content:space-between;align-items:center">
+      <h4 style="margin:0">Guide settings</h4><button class="btn small" style="background:var(--pale);color:var(--navy)" id="dclose">Close</button>
+    </section>
+    <section>
+      <h4>Sync</h4>
+      <p class="${stale ? '' : 'muted'}" style="font-weight:700;margin-bottom:8px">
+        ${last ? `Last sync ${esc(new Date(last.ran_at).toLocaleString())} by ${esc(last.ran_by || 'a guide')} · ${last.kids} kids` : 'No sync yet.'}
+        ${stale ? '<br>Data looks stale: sign in to Timeback and sync again.' : ''}</p>
+      <p class="muted" style="font-size:13px;margin-bottom:8px">Press <b>Sync</b> on the board, then click this bookmark in the Timeback tab. Drag it to your bookmarks bar once:</p>
+      <p style="margin-bottom:12px"><a class="bookmark" id="bm" href="#">Mojo sync</a></p>
+      <div class="field"><label for="cm">Timeback class title contains</label>
+        <input id="cm" value="${esc(data.settings.class_match || '')}"></div>
+      <details><summary class="muted" style="font-weight:700;cursor:pointer">Paste sync (if the bookmark copied instead)</summary>
+        <textarea class="paste" id="paste" placeholder="Paste here"></textarea>
+        <button class="btn small primary" id="pasteGo" style="margin-top:6px">Save pasted sync</button></details>
+    </section>
+    <section><h4>The rules</h4><ul>${rulesInWords().map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+      <p class="muted" style="font-size:12px;margin-top:8px">Change these in mojo/app.js. Both screens read the same file.</p></section>
+    <section><h4>Kids</h4>
+      ${kids.map(k => {
+        const subs = Object.keys(k.goals || {}).filter(s => Number(k.goals[s]) > 0);
+        return `<div class="kidrow" data-kid="${esc(k.id)}">
+          <div><input type="text" data-f="display_name" value="${esc(k.display_name || '')}" placeholder="${esc(kidName(k))}" aria-label="Display name">
+            <div class="muted" style="font-size:12px;margin-top:4px">${esc(k.timeback_name || '')}</div></div>
+          <div><div class="subjects">${subs.map(s => `<button class="sbtn ${(k.rings_off || []).includes(s) ? 'off' : ''}" data-ring="${esc(s)}">${esc(s)}</button>`).join('') || '<span class="muted">no goals yet</span>'}</div>
+            <label class="check"><input type="checkbox" data-f="language_with_reading" ${k.language_with_reading ? 'checked' : ''}> Language with Reading</label>
+            <label class="check"><input type="checkbox" data-f="hidden" ${k.hidden ? 'checked' : ''}> Hide from board</label></div>
+        </div>`; }).join('') || '<p class="muted">Kids appear after the first sync.</p>'}
+      <p class="muted" style="font-size:12px;margin-top:8px">Tap a subject to switch its ring off. Emails, focus lines and fun facts: <a href="/house/guide" style="color:var(--medium)">Alpha House kids list</a>.</p>
+    </section>
+    <section class="actions">
+      <button class="btn" style="background:var(--pale);color:var(--navy)" id="signout">Sign out</button>
+      <button class="btn" style="background:var(--pale);color:var(--navy)" id="forget">Forget Supabase connection</button>
+    </section>`;
+  drawer.classList.add('open');
+
+  drawer.querySelector('#dclose').onclick = () => drawer.classList.remove('open');
+  drawer.querySelector('#signout').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+  drawer.querySelector('#forget').onclick = () => { if (confirm('Forget the saved Supabase URL and key in this browser?')) { forgetConfig(); location.reload(); } };
+  drawer.querySelector('#cm').onchange = async e => {
+    const { error } = await sb.from('settings').upsert({ key: 'class_match', value: e.target.value.trim(), updated_at: new Date().toISOString() });
+    toast(error ? 'Could not save: ' + error.message : 'Saved');
+    if (!error) data.settings.class_match = e.target.value.trim();
+  };
+  drawer.querySelector('#pasteGo').onclick = () => {
+    try { runSync(JSON.parse(drawer.querySelector('#paste').value)); }
+    catch { toast('That paste isn’t sync data.'); }
+  };
+  // Bookmark: the sync script itself, as a javascript: link (no key inside).
+  fetch('/mojo/sync.js').then(r => r.text()).then(code => {
+    const a = drawer.querySelector('#bm');
+    if (a) { a.href = 'javascript:' + encodeURIComponent(code); a.onclick = e => { e.preventDefault(); toast('Drag this to your bookmarks bar.'); }; }
+  });
+
+  drawer.querySelectorAll('.kidrow').forEach(row => {
+    const id = row.dataset.kid;
+    const save = async patch => {
+      const { error } = await sb.from('kids').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) return toast('Could not save: ' + error.message);
+      Object.assign(data.kids.find(k => k.id === id), patch); render();
+    };
+    row.querySelector('[data-f=display_name]').onchange = e => save({ display_name: e.target.value.trim() || null });
+    row.querySelector('[data-f=language_with_reading]').onchange = e => save({ language_with_reading: e.target.checked });
+    row.querySelector('[data-f=hidden]').onchange = e => save({ hidden: e.target.checked });
+    row.querySelectorAll('[data-ring]').forEach(b => b.onclick = () => {
+      const k = data.kids.find(x => x.id === id), s = b.dataset.ring;
+      const off = new Set(k.rings_off || []); off.has(s) ? off.delete(s) : off.add(s);
+      b.classList.toggle('off');
+      save({ rings_off: [...off] });
+    });
+  });
+}
+</script>
+</body>
+</html>

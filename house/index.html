@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Alpha House</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/mojo/mojo.css">
+<style>
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px 40px}
+  .hello{font-weight:900;font-size:clamp(28px,5vw,44px);line-height:1;text-transform:uppercase;margin:6px 0 4px}
+  .hello span{color:var(--sky)}
+  .sync{font-size:13px;font-weight:600;color:var(--pale);margin-bottom:18px}
+  .h{font-weight:900;font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--sky);margin:24px 0 10px}
+  .days{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  .days .cell{width:100%}
+  .daylbl{font-weight:800;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--pale);margin-bottom:4px}
+  .todayline{background:#fff;color:var(--navy);border-radius:var(--radius);padding:16px 18px;font-weight:800;font-size:18px;line-height:1.4}
+  .rewards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .reward{background:rgba(255,255,255,.08);border-radius:var(--radius);padding:16px}
+  .reward.won{background:var(--accent);color:var(--navy)}
+  .reward .name{font-weight:900;font-size:18px;text-transform:uppercase}
+  .reward .big{font-weight:900;font-size:34px;line-height:1.1;font-variant-numeric:tabular-nums}
+  .reward p{font-weight:600;font-size:15px;line-height:1.4;margin-top:4px}
+  .reward .bar{margin-top:10px;height:10px;border-radius:5px}
+  .reward.won .bar i{background:var(--navy)}
+  .note{background:rgba(255,255,255,.08);border-radius:var(--radius);padding:16px;font-weight:600;font-size:16px;line-height:1.5}
+  .note b{display:block;font-weight:900;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--sky);margin-bottom:4px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .lock{position:fixed;inset:0;z-index:90;background:var(--field);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:24px;gap:10px}
+  .lock h2{font-weight:900;font-size:clamp(28px,6vw,52px);text-transform:uppercase;line-height:1}
+  .lock p{font-weight:600;font-size:18px;color:var(--pale)}
+  .foot{display:flex;justify-content:flex-end;margin-top:28px}
+  @media (max-width:700px){
+    .days{grid-template-columns:1fr;gap:6px}
+    .days .cell{min-height:56px;flex-direction:row;align-items:center;justify-content:space-between}
+    .rewards,.two{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<dialog id="dlg"><div class="panel" id="dlgBody"></div><div class="closebar"><button class="btn" id="dlgClose">Close</button></div></dialog>
+
+<script type="module">
+import { RULES, today, weekStartOf, addDays, shortDay, buildKidWeek, pizzaStatus, todayLine,
+  lockedNow, esc, supa, session, signInCard } from '/mojo/app.js';
+import { cardHtml, dayDetailHtml } from '/mojo/ui.js';
+
+const root = document.getElementById('app');
+const dlg = document.getElementById('dlg');
+document.getElementById('dlgClose').onclick = () => dlg.close();
+let sb, week, card;
+
+/* Locked during Core Skills blocks so it doesn't pull kids off their apps. */
+function lockCheck() {
+  const until = lockedNow();
+  let el = document.getElementById('lock');
+  if (!until) { if (el) el.remove(); return false; }
+  if (!el) { el = document.createElement('div'); el.id = 'lock'; el.className = 'lock'; document.body.appendChild(el); }
+  const [h, m] = until.split(':').map(Number);
+  const t = new Date(); t.setHours(h, m, 0, 0);
+  el.innerHTML = `<img class="logo" src="/mojo/assets/alpha-school-logo-white.svg" alt="Alpha School" style="height:40px">
+    <h2>Core Skills time</h2><p>Your apps first! Alpha House opens again at ${esc(t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}.</p>`;
+  return true;
+}
+
+(async function main() {
+  lockCheck(); setInterval(lockCheck, 30_000);
+  sb = await supa(root);
+  const s = await session(sb);
+  if (!s) return signInCard(root, sb, 'Sign in with your own Alpha School Google account.');
+  await load();
+  setInterval(() => { if (!dlg.open) load(); }, 5 * 60_000);
+})().catch(e => {
+  console.error(e);
+  root.innerHTML = `<div class="setup"><h2>Hmm, that didn't work</h2><p>${esc(e.message || e)}</p>
+    <p>Tell your guide if this keeps happening.</p><button class="btn primary" onclick="location.reload()">Try again</button></div>`;
+});
+
+async function load() {
+  const t = today();
+  const start = weekStartOf(t);
+  const end = addDays(start, 6);
+  const { data, error } = await sb.rpc('house_card', { p_from: start, p_to: end });
+  if (error) throw error;
+  if (!data.found) {
+    const { data: u } = await sb.auth.getUser();
+    root.innerHTML = `<div class="setup"><h2>Almost there</h2>
+      <p>Your page isn't ready for <b>${esc(u.user && u.user.email)}</b> yet. Ask your guide to add this email to the Alpha House kids list.</p>
+      <button class="btn primary" id="out">Use a different account</button></div>`;
+    root.querySelector('#out').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+    return;
+  }
+  const kid = data.kid;
+  const days = data.days.map(d => ({ ...d, kid_id: kid.id }));
+  week = buildKidWeek({ kid, days, flags: data.flags, classDays: data.class_days, start, todayStr: t });
+  card = week.cards.find(c => c.phase === 'today') || null;
+  const pizza = pizzaStatus(data.class_week_xp);
+  const calls = data.flags.filter(f => f.call_time && f.day >= t).sort((a, b) => a.day.localeCompare(b.day));
+  render(kid, start, pizza, calls, data.synced_at);
+}
+
+function render(kid, start, pizza, calls, syncedAt) {
+  const s = week.smoothie, f = week.funFriday;
+  const counted = s.counted;
+  const smoothieText = s.status === 'won' ? 'Every day was Epic. Smoothie time!'
+    : s.status === 'out' ? 'Not this week. A new week starts Friday!'
+    : `${s.epic} of ${counted} Epic days so far. Keep every day Epic!`;
+  const funText = f.status === 'won' ? 'Your accuracy earned Fun Friday!'
+    : f.status === 'out' ? 'Not this week. Next week is a fresh start!'
+    : `${f.toGo} more day${f.toGo === 1 ? '' : 's'} with every subject above 80% accuracy.`;
+  const mine = week.weekXp, toPizza = Math.max(0, RULES.PIZZA_WEEK_XP - mine);
+  const pizzaText = pizza.won ? 'Everyone made it. Pizza party!'
+    : `${pizza.done} of ${pizza.total} kids are at ${RULES.PIZZA_WEEK_XP} XP.` +
+      (toPizza ? ` You need ${toPizza} more.` : ' You made it. Cheer on your class!');
+
+  root.innerHTML = `
+    <header class="top"><img class="logo" src="/mojo/assets/alpha-school-logo-white.svg" alt="Alpha School"><div class="grow"></div>
+      <div class="title" style="font-size:18px"><small>Mojo Dojo</small>Alpha House</div></header>
+    <main class="wrap">
+      <h1 class="hello">Hi, <span>${esc(kid.name)}</span></h1>
+      <p class="sync">${syncedAt ? 'Updated ' + esc(new Date(syncedAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })) : ''}</p>
+
+      <section aria-label="Today"><div class="todayline">${esc(todayLine(card))}</div></section>
+
+      <h2 class="h">My week · ${esc(shortDay(start))} – ${esc(shortDay(addDays(start, 6)))}</h2>
+      <div class="days">${week.cards.map(c => `<div><div class="daylbl">${esc(shortDay(c.date))}${c.covers.length > 1 ? ' + weekend' : ''}</div>${cardHtml(c)}</div>`).join('')}</div>
+
+      <h2 class="h">This week's rewards</h2>
+      <div class="rewards">
+        <div class="reward ${s.status === 'won' ? 'won' : ''}"><div class="name">Smoothie</div>
+          <div class="big">${s.epic}/${counted}</div><p>${esc(smoothieText)}</p></div>
+        <div class="reward ${f.status === 'won' ? 'won' : ''}"><div class="name">Fun Friday</div>
+          <div class="big">${f.qualifying}/${f.needed}</div><p>${esc(funText)}</p></div>
+        <div class="reward ${pizza.won ? 'won' : ''}"><div class="name">Pizza</div>
+          <div class="big">${mine} XP</div><p>${esc(pizzaText)}</p>
+          <div class="bar"><i style="width:${Math.min(100, Math.round(mine / RULES.PIZZA_WEEK_XP * 100))}%"></i></div></div>
+      </div>
+
+      <h2 class="h">From my guide</h2>
+      <div class="two">
+        <div class="note"><b>My focus</b>${kid.focus ? esc(kid.focus) : '<span style="opacity:.7">Coming soon</span>'}</div>
+        <div class="note"><b>Coaching calls</b>${calls.length
+          ? calls.map(c => `${esc(shortDay(c.day))} at ${esc(c.call_time)}`).join('<br>')
+          : '<span style="opacity:.7">None booked</span>'}</div>
+      </div>
+      ${kid.fun_fact ? `<h2 class="h">Fun fact</h2><div class="note">${esc(kid.fun_fact)}</div>` : ''}
+
+      <div class="foot"><button class="btn small" id="out">Sign out</button></div>
+    </main>`;
+
+  root.querySelectorAll('button.cell').forEach(b => b.onclick = () => {
+    const c = week.cards.find(x => x.date === b.dataset.day);
+    document.getElementById('dlgBody').innerHTML = dayDetailHtml(c, 'My day');
+    dlg.showModal();
+  });
+  root.querySelector('#out').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+}
+</script>
+</body>
+</html>

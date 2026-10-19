@@ -338,7 +338,7 @@ export function askForConfig(root) {
     root.innerHTML = `
       <form class="setup" id="cfg">
         <h2>Connect to Supabase</h2>
-        <p>Paste your project's URL and <b>anon public</b> key from Supabase → Project Settings → API.
+        <p>Paste your project's URL and its <b>publishable</b> (or <b>anon public</b>) key from Supabase → Project Settings → API Keys.
         They're saved in this browser only, never in the code.</p>
         <label>Project URL<input name="url" required placeholder="https://xxxx.supabase.co"></label>
         <label>Anon public key<input name="key" required autocomplete="off"></label>
@@ -350,7 +350,7 @@ export function askForConfig(root) {
       const url = String(fd.get('url')).trim().replace(/\/+$/, '');
       const key = String(fd.get('key')).trim();
       if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) { alert('That URL should look like https://xxxx.supabase.co'); return; }
-      if (/service_role/.test(atobSafe(key.split('.')[1] || ''))) {
+      if (/^sb_secret_/.test(key) || /service_role/.test(atobSafe(key.split('.')[1] || ''))) {
         alert('That is the service_role key. Use the anon public key — the service key must never be in a browser.'); return;
       }
       try { localStorage.setItem(CFG_KEY, JSON.stringify({ url, key })); } catch {}

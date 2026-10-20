@@ -66,10 +66,15 @@ assert.equal(w.smoothie.status, 'out');          // a plain missed day breaks it
 w = buildKidWeek({ kid, days: [epicDays[0], row('2026-10-19', sub(10, 10))], flags: [], classDays: [], start, todayStr: '2026-10-19' });
 assert.equal(w.smoothie.status, 'alive');
 
-// Fun Friday: each worked subject ABOVE 80%; unworked subjects skipped
+// Fun Friday: All Subjects accuracy (every question added together) ABOVE 80%
 assert.equal(funFridayDay({ Math: { questions: 10, correct: 9 }, Reading: { questions: 0, correct: 0 } }), true);
 assert.equal(funFridayDay({ Math: { questions: 10, correct: 8 } }), false);   // exactly 80% isn't above
+// 9/10 + 7/10 = 16/20 = 80% → not above
 assert.equal(funFridayDay({ Math: { questions: 10, correct: 9 }, Reading: { questions: 10, correct: 7 } }), false);
+// one weak subject is fine when the day overall is above 80%: 29/30 + 7/10 = 36/40 = 90%
+assert.equal(funFridayDay({ Math: { questions: 30, correct: 29 }, Reading: { questions: 10, correct: 7 } }), true);
+// a strong small subject can't rescue a weak big one: 10/10 + 30/40 = 40/50 = 80%
+assert.equal(funFridayDay({ Math: { questions: 10, correct: 10 }, Reading: { questions: 40, correct: 30 } }), false);
 assert.equal(funFridayDay({}), false);
 // 4 of 5 qualifying → won; 3 of 5 → out
 const ff = (good) => ['2026-10-16', '2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22']

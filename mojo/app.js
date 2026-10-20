@@ -24,9 +24,10 @@ export const RULES = {
   // Excused days and no-school days are not counted.
   SMOOTHIE: { excusedCounts: false },
 
-  // Fun Friday: on 4 of the week's 5 school days, accuracy is ABOVE 80% in
-  // each subject the kid worked in that day. Subjects with no questions that
-  // day are skipped. A day with no questions at all doesn't qualify.
+  // Fun Friday: on 4 of the week's 5 school days, "All Subjects" accuracy is
+  // ABOVE 80% — every question answered that day in every subject, added
+  // together (correct ÷ total), like Timeback's All Subjects view.
+  // A day with no questions at all doesn't qualify.
   // Short weeks (no-school / excused days removed) allow the same one miss:
   // 5 counted days → 4 needed, 4 → 3, 3 → 2.
   FUN_FRIDAY: { accuracyAbove: 0.80, daysNeeded: 4, missesAllowed: 1 },
@@ -58,7 +59,7 @@ export function rulesInWords(r = RULES) {
     `The week runs ${DOW[r.WEEK_START_DOW]} to ${DOW[(r.WEEK_START_DOW + 6) % 7]}` +
       (r.WEEKEND_INTO_FRIDAY ? '; Saturday and Sunday work counts toward Friday.' : '.'),
     `Smoothie: every counted day of the week is Epic. Excused and no-school days don't count.`,
-    `Fun Friday: ${r.FUN_FRIDAY.daysNeeded} of 5 days with accuracy above ${pct(r.FUN_FRIDAY.accuracyAbove)} in every subject worked that day (one miss allowed in short weeks).`,
+    `Fun Friday: ${r.FUN_FRIDAY.daysNeeded} of 5 days with accuracy above ${pct(r.FUN_FRIDAY.accuracyAbove)} in All Subjects that day, every question added together (one miss allowed in short weeks).`,
     `Pizza: everyone on the board reaches ${r.PIZZA_WEEK_XP} XP in the week.`,
     `Time icon: ${r.TIME_ICON_MINUTES} active minutes. Accuracy icon: ${pct(r.ACCURACY_ICON)}+ across every question.`,
   ];
@@ -154,9 +155,11 @@ export function tierOf(xp, ringsOk, r = RULES) {
 
 /** Did this day qualify for Fun Friday? */
 export function funFridayDay(subjects, r = RULES) {
-  const worked = Object.values(subjects || {}).filter(m => num(m.questions) > 0);
-  if (!worked.length) return false;
-  return worked.every(m => num(m.correct) / num(m.questions) > r.FUN_FRIDAY.accuracyAbove);
+  const all = Object.values(subjects || {});
+  const questions = all.reduce((a, m) => a + num(m.questions), 0);
+  const correct = all.reduce((a, m) => a + num(m.correct), 0);
+  if (!questions) return false;
+  return correct / questions > r.FUN_FRIDAY.accuracyAbove;
 }
 
 /**

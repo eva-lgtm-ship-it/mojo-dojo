@@ -22,7 +22,7 @@ tests/rules.test.mjs  rules tests with made-up data  (npm test)
 - **Epic** 145+ XP, **Minimum** 120–144 XP — both need every ring closed (Day pass / Test day lets rings stay open).
 - **Week** Friday → Thursday; Saturday and Sunday work counts toward Friday.
 - **Smoothie** every counted day Epic; excused and no-school days aren't counted.
-- **Fun Friday** 4 of 5 days with accuracy *above* 80% in each subject worked that day; subjects not worked are skipped. Short weeks allow the same one miss (4 counted days → 3 needed).
+- **Fun Friday** 4 of 5 days with *All Subjects* accuracy *above* 80% that day (every question in every subject added together). Short weeks allow the same one miss (4 counted days → 3 needed).
 - **Pizza** every kid on the board reaches 600 XP in the week.
 
 ## Setup (nothing here is done yet)

@@ -111,7 +111,7 @@ function render(kid, start, pizza, calls, syncedAt) {
     : `${s.epic} of ${counted} Epic days so far. Keep every day Epic!`;
   const funText = f.status === 'won' ? 'Your accuracy earned Fun Friday!'
     : f.status === 'out' ? 'Not this week. Next week is a fresh start!'
-    : `${f.toGo} more day${f.toGo === 1 ? '' : 's'} above 80% accuracy in All Subjects.`;
+    : `${f.toGo} more day${f.toGo === 1 ? '' : 's'} with your All Subjects accuracy above 80%.`;
   const mine = week.weekXp, toPizza = Math.max(0, RULES.PIZZA_WEEK_XP - mine);
   const pizzaText = pizza.won ? 'Everyone made it. Pizza party!'
     : `${pizza.done} of ${pizza.total} kids are at ${RULES.PIZZA_WEEK_XP} XP.` +

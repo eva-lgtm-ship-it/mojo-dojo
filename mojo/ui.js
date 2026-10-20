@@ -50,7 +50,7 @@ export function dayDetailHtml(c, title) {
   ].filter(Boolean);
   return `
     <h3>${esc(title)}</h3>
-    <p class="sub">${esc(shortDay(c.date))} · ${c.tier === 'notyet' ? 'Not yet' : tierLabel(c.tier) + ' day'}${c.funDay ? ' · Fun Friday accuracy ✓' : ''}</p>
+    <p class="sub">${esc(shortDay(c.date))} · ${c.tier === 'notyet' ? 'Not yet' : tierLabel(c.tier) + ' day'} · All Subjects accuracy ${pct(c.allSubjectsAcc)}${c.funDay ? ' ✓ Fun Friday' : ''}</p>
     <div class="stats">
       <div class="stat"><b>${c.xp}</b><span>XP</span></div>
       <div class="stat"><b>${c.minutes}</b><span>Minutes${c.timeIcon ? ' ✓' : ''}</span></div>

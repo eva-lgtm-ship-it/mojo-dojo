@@ -1,6 +1,6 @@
 // Run with: node tests/rules.test.mjs   (made-up sample data only)
 import assert from 'node:assert/strict';
-import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, funFridayDay, allSubjectsAccuracy,
+import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, funFridayDay, allSubjectsAccuracy,
   lockedNow, todayLine } from '../mojo/app.js';
 
 const kid = { rings_off: [], language_with_reading: false, open_subjects: ['Math', 'Reading'],
@@ -105,6 +105,12 @@ const exFlags = [
 ];
 assert.deepEqual(allExcusedDays({ kidIds: ['a', 'b'], flags: exFlags, start: '2026-10-16' }), ['2026-10-20']);
 assert.deepEqual(allExcusedDays({ kidIds: [], flags: exFlags, start: '2026-10-16' }), []);
+// No school days lower the goal too; a day that is both counts once; other weeks ignored
+assert.deepEqual(pizzaOffDays({ excusedDays: ['2026-10-20'], classDays: [
+  { day: '2026-10-20', no_school: true }, { day: '2026-10-22', no_school: true },
+  { day: '2026-10-21', no_school: false, apps_out: ['Math'] }, { day: '2026-10-29', no_school: true }],
+  start: '2026-10-16' }), ['2026-10-20', '2026-10-22']);
+assert.equal(pizzaGoal(pizzaOffDays({ classDays: [{ day: '2026-10-19', no_school: true }], start: '2026-10-16' }).length), 480);
 // next week's flags don't leak into this week
 assert.deepEqual(allExcusedDays({ kidIds: ['a', 'b'], flags: exFlags, start: '2026-10-23' }), []);
 

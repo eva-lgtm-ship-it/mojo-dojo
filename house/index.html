@@ -45,7 +45,7 @@
 <dialog id="dlg"><div class="panel" id="dlgBody"></div><div class="closebar"><button class="btn" id="dlgClose">Close</button></div></dialog>
 
 <script type="module">
-import { RULES, today, weekStartOf, addDays, shortDay, buildKidWeek, pizzaStatus, pizzaGoal, todayLine,
+import { RULES, today, weekStartOf, addDays, shortDay, buildKidWeek, pizzaStatus, pizzaGoal, pizzaOffDays, todayLine,
   lockedNow, esc, supa, session, signInCard } from '/mojo/app.js';
 import { cardHtml, dayDetailHtml } from '/mojo/ui.js';
 
@@ -98,10 +98,9 @@ async function load() {
   const days = data.days.map(d => ({ ...d, kid_id: kid.id }));
   week = buildKidWeek({ kid, days, flags: data.flags, classDays: data.class_days, start, todayStr: t });
   card = week.cards.find(c => c.phase === 'today') || null;
-  // whole-class excused days that fall on this week's school-day cards
-  const cardDates = new Set(week.cards.map(c => c.date));
-  const excusedDays = (data.all_excused_days || []).filter(d => cardDates.has(d));
-  const pizza = pizzaStatus(data.class_week_xp, pizzaGoal(excusedDays.length));
+  // No school days + whole-class excused days this week lower the Pizza goal
+  const offDays = pizzaOffDays({ excusedDays: data.all_excused_days || [], classDays: data.class_days, start });
+  const pizza = pizzaStatus(data.class_week_xp, pizzaGoal(offDays.length));
   const calls = data.flags.filter(f => f.call_time && f.day >= t).sort((a, b) => a.day.localeCompare(b.day));
   render(kid, start, pizza, calls, data.synced_at);
 }
@@ -137,7 +136,7 @@ function render(kid, start, pizza, calls, syncedAt) {
         <div class="reward ${s.status === 'won' ? 'won' : ''}"><div class="name">Smoothie</div>
           <div class="big">${s.epic}/${counted}</div><p>${esc(smoothieText)}</p></div>
         <div class="reward ${f.status === 'won' ? 'won' : ''}"><div class="name">Fun Friday</div>
-          <div class="big">${f.qualifying}/${f.needed}</div><p>${esc(funText)}</p></div>
+          <div class="big">${Math.min(f.qualifying, f.needed)}/${f.needed}</div><p>${esc(funText)}</p></div>
         <div class="reward ${pizza.won ? 'won' : ''}"><div class="name">Pizza</div>
           <div class="big">${mine} XP</div><p>${esc(pizzaText)}</p>
           <div class="bar"><i style="width:${Math.min(100, Math.round(mine / Math.max(1, pizza.goal) * 100))}%"></i></div></div>

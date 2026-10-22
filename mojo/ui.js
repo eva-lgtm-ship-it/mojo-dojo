@@ -70,7 +70,7 @@ export function smoothieHtml(w) {
 export function funFridayHtml(w) {
   const f = w.funFriday;
   const cls = f.status === 'won' ? 'won' : f.status === 'out' ? 'out' : '';
-  return `<div class="wk ${cls}"><span class="big">${f.qualifying}/${f.needed}</span>
+  return `<div class="wk ${cls}"><span class="big">${Math.min(f.qualifying, f.needed)}/${f.needed}</span>
     <span class="small">${f.status === 'won' ? 'Fun Friday!' : f.status === 'out' ? 'not this week' : 'days >80%'}</span></div>`;
 }
 export function weekXpHtml(w, goal = RULES.PIZZA_WEEK_XP) {

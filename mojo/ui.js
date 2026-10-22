@@ -73,12 +73,12 @@ export function funFridayHtml(w) {
   return `<div class="wk ${cls}"><span class="big">${f.qualifying}/${f.needed}</span>
     <span class="small">${f.status === 'won' ? 'Fun Friday!' : f.status === 'out' ? 'not this week' : 'days >80%'}</span></div>`;
 }
-export function weekXpHtml(w) {
-  const p = Math.min(100, Math.round(w.weekXp / RULES.PIZZA_WEEK_XP * 100));
-  const won = w.weekXp >= RULES.PIZZA_WEEK_XP;
+export function weekXpHtml(w, goal = RULES.PIZZA_WEEK_XP) {
+  const p = goal ? Math.min(100, Math.round(w.weekXp / goal * 100)) : 100;
+  const won = w.weekXp >= goal;
   return `<div class="wk ${won ? 'won' : ''}"><span class="big">${w.weekXp}</span>
     <span class="bar"><i style="width:${p}%"></i></span>
-    <span class="small">${won ? 'pizza line ✓' : `${RULES.PIZZA_WEEK_XP - w.weekXp} to ${RULES.PIZZA_WEEK_XP}`}</span></div>`;
+    <span class="small">${won ? 'pizza line ✓' : `${goal - w.weekXp} to ${goal}`}</span></div>`;
 }
 
 export function toast(msg, ms = 3000) {

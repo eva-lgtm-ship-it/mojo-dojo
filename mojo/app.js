@@ -35,6 +35,9 @@ export const RULES = {
 
   // Pizza (whole class): every kid on the board reaches 600 XP in the week.
   PIZZA_WEEK_XP: 600,
+  // Each day the WHOLE class is excused (every kid on the board marked Excused)
+  // takes this much off the Pizza goal: one such day → 480, two → 360.
+  PIZZA_EXCUSED_DAY_XP: 120,
 
   // Kid page is locked during Core Skills blocks on weekdays (local time).
   CORE_SKILLS_LOCK: [['09:00', '10:10'], ['10:30', '11:40']],
@@ -61,7 +64,7 @@ export function rulesInWords(r = RULES) {
       (r.WEEKEND_INTO_FRIDAY ? '; Saturday and Sunday work counts toward Friday.' : '.'),
     `Smoothie: every counted day of the week is Epic. Excused and no-school days don't count.`,
     `Fun Friday: ${r.FUN_FRIDAY.daysNeeded} of 5 days with accuracy above ${pct(r.FUN_FRIDAY.accuracyAbove)} on the All Subjects ring, the average of each subject's accuracy that day (one miss allowed in short weeks).`,
-    `Pizza: everyone on the board reaches ${r.PIZZA_WEEK_XP} XP in the week.`,
+    `Pizza: everyone on the board reaches ${r.PIZZA_WEEK_XP} XP in the week, ${r.PIZZA_EXCUSED_DAY_XP} less for each day the whole class is excused (one day → ${r.PIZZA_WEEK_XP - r.PIZZA_EXCUSED_DAY_XP}).`,
     `Time icon: ${r.TIME_ICON_MINUTES} active minutes. Accuracy icon: ${pct(r.ACCURACY_ICON)}+ across every question.`,
   ];
 }
@@ -255,10 +258,23 @@ export function weekXp(dayRows) {
 }
 
 /** Pizza: whole class. xps = one week total per kid on the board. */
-export function pizzaStatus(xps, r = RULES) {
-  const done = xps.filter(x => x >= r.PIZZA_WEEK_XP).length;
-  return { done, total: xps.length, won: xps.length > 0 && done === xps.length,
-    lowestToGo: xps.length ? Math.max(0, r.PIZZA_WEEK_XP - Math.min(...xps)) : 0 };
+export function pizzaStatus(xps, goal = RULES.PIZZA_WEEK_XP) {
+  const done = xps.filter(x => x >= goal).length;
+  return { goal, done, total: xps.length, won: xps.length > 0 && done === xps.length,
+    lowestToGo: xps.length ? Math.max(0, goal - Math.min(...xps)) : 0 };
+}
+
+/** School days of the week (card dates) on which every kid on the board is Excused. */
+export function allExcusedDays({ kidIds, flags, start }, r = RULES) {
+  if (!kidIds.length) return [];
+  const excused = new Set(flags.filter(f => f.excused).map(f => f.kid_id + '|' + f.day));
+  return weekCards(start, r).map(c => c.date)
+    .filter(d => kidIds.every(id => excused.has(id + '|' + d)));
+}
+
+/** This week's Pizza goal: 600, minus 120 per whole-class excused day. */
+export function pizzaGoal(excusedDayCount = 0, r = RULES) {
+  return Math.max(0, r.PIZZA_WEEK_XP - r.PIZZA_EXCUSED_DAY_XP * excusedDayCount);
 }
 
 /**

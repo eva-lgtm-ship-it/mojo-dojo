@@ -300,6 +300,17 @@ begin
         where k.active and not k.hidden
         group by k.id
       ) t), '[]'),
+    -- dates when EVERY kid on the board was excused (dates only, no names); lowers the Pizza goal
+    'all_excused_days', coalesce((
+      select jsonb_agg(e.day order by e.day)
+      from (
+        select f.day
+        from public.day_flags f
+        join public.kids k on k.id = f.kid_id and k.active and not k.hidden
+        where f.excused and f.day between p_from and p_to
+        group by f.day
+        having count(distinct f.kid_id) = (select count(*) from public.kids where active and not hidden)
+      ) e), '[]'),
     'synced_at', (select max(ran_at) from public.sync_log)
   );
 end;

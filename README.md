@@ -23,7 +23,7 @@ tests/rules.test.mjs  rules tests with made-up data  (npm test)
 - **Week** Friday → Thursday; Saturday and Sunday work counts toward Friday.
 - **Smoothie** every counted day Epic; excused and no-school days aren't counted.
 - **Fun Friday** 4 of 5 days with the *All Subjects* accuracy ring *above* 80% that day. All Subjects = the average of each subject's accuracy (each subject counts equally; subjects with no questions that day are left out). Short weeks allow the same one miss (4 counted days → 3 needed).
-- **Pizza** every kid on the board reaches 600 XP in the week.
+- **Pizza** every kid on the board reaches 600 XP in the week. Each school day the whole class is marked Excused takes 120 off the goal (one day → 480, two → 360).
 
 ## Setup (nothing here is done yet)
 

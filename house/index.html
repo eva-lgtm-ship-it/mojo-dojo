@@ -45,7 +45,7 @@
 <dialog id="dlg"><div class="panel" id="dlgBody"></div><div class="closebar"><button class="btn" id="dlgClose">Close</button></div></dialog>
 
 <script type="module">
-import { RULES, today, weekStartOf, addDays, shortDay, buildKidWeek, pizzaStatus, todayLine,
+import { RULES, today, weekStartOf, addDays, shortDay, buildKidWeek, pizzaStatus, pizzaGoal, todayLine,
   lockedNow, esc, supa, session, signInCard } from '/mojo/app.js';
 import { cardHtml, dayDetailHtml } from '/mojo/ui.js';
 
@@ -98,7 +98,10 @@ async function load() {
   const days = data.days.map(d => ({ ...d, kid_id: kid.id }));
   week = buildKidWeek({ kid, days, flags: data.flags, classDays: data.class_days, start, todayStr: t });
   card = week.cards.find(c => c.phase === 'today') || null;
-  const pizza = pizzaStatus(data.class_week_xp);
+  // whole-class excused days that fall on this week's school-day cards
+  const cardDates = new Set(week.cards.map(c => c.date));
+  const excusedDays = (data.all_excused_days || []).filter(d => cardDates.has(d));
+  const pizza = pizzaStatus(data.class_week_xp, pizzaGoal(excusedDays.length));
   const calls = data.flags.filter(f => f.call_time && f.day >= t).sort((a, b) => a.day.localeCompare(b.day));
   render(kid, start, pizza, calls, data.synced_at);
 }
@@ -112,9 +115,9 @@ function render(kid, start, pizza, calls, syncedAt) {
   const funText = f.status === 'won' ? 'Your accuracy earned Fun Friday!'
     : f.status === 'out' ? 'Not this week. Next week is a fresh start!'
     : `${f.toGo} more day${f.toGo === 1 ? '' : 's'} with your All Subjects accuracy above 80%.`;
-  const mine = week.weekXp, toPizza = Math.max(0, RULES.PIZZA_WEEK_XP - mine);
+  const mine = week.weekXp, toPizza = Math.max(0, pizza.goal - mine);
   const pizzaText = pizza.won ? 'Everyone made it. Pizza party!'
-    : `${pizza.done} of ${pizza.total} kids are at ${RULES.PIZZA_WEEK_XP} XP.` +
+    : `${pizza.done} of ${pizza.total} kids are at ${pizza.goal} XP.` +
       (toPizza ? ` You need ${toPizza} more.` : ' You made it. Cheer on your class!');
 
   root.innerHTML = `
@@ -137,7 +140,7 @@ function render(kid, start, pizza, calls, syncedAt) {
           <div class="big">${f.qualifying}/${f.needed}</div><p>${esc(funText)}</p></div>
         <div class="reward ${pizza.won ? 'won' : ''}"><div class="name">Pizza</div>
           <div class="big">${mine} XP</div><p>${esc(pizzaText)}</p>
-          <div class="bar"><i style="width:${Math.min(100, Math.round(mine / RULES.PIZZA_WEEK_XP * 100))}%"></i></div></div>
+          <div class="bar"><i style="width:${Math.min(100, Math.round(mine / Math.max(1, pizza.goal) * 100))}%"></i></div></div>
       </div>
 
       <h2 class="h">From my guide</h2>

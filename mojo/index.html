@@ -14,7 +14,7 @@
 <aside class="drawer" id="drawer" aria-label="Guide settings"></aside>
 
 <script type="module">
-import { RULES, today, weekStartOf, addDays, shortDay, weekCards, buildKidWeek, pizzaStatus,
+import { RULES, today, weekStartOf, addDays, shortDay, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays,
   rulesInWords, esc, kidName, supa, session, isGuide, loadWeek, signInCard, forgetConfig, SUBJECT_ORDER }
   from '/mojo/app.js';
 import { cardHtml, dayDetailHtml, smoothieHtml, funFridayHtml, weekXpHtml, toast } from '/mojo/ui.js';
@@ -84,7 +84,9 @@ function render() {
   const smoothies = kids.filter(k => weeks[k.id].smoothie.status === 'won').length;
   const smoothieAlive = kids.filter(k => weeks[k.id].smoothie.status === 'alive').length;
   const fun = kids.filter(k => weeks[k.id].funFriday.status === 'won').length;
-  const pizza = pizzaStatus(kids.map(k => weeks[k.id].weekXp));
+  const excusedDays = allExcusedDays({ kidIds: kids.map(k => k.id), flags: data.flags, start });
+  const goal = pizzaGoal(excusedDays.length);
+  const pizza = pizzaStatus(kids.map(k => weeks[k.id].weekXp), goal);
   const last = data.lastSync ? new Date(data.lastSync.ran_at) : null;
   const stale = !last || (Date.now() - last) / 36e5 > RULES.STALE_AFTER_HOURS;
   const isThisWeek = start === weekStartOf(today());
@@ -106,7 +108,8 @@ function render() {
     <div class="chips">
       <span class="chip ${smoothies ? 'win' : ''}">Smoothies <b>${smoothies}</b>${smoothieAlive ? ` <span>+${smoothieAlive} still going</span>` : ''}</span>
       <span class="chip ${fun ? 'win' : ''}">Fun Friday <b>${fun}</b></span>
-      <span class="chip ${pizza.won ? 'win' : ''}">Pizza <b>${pizza.done}/${pizza.total}</b> at ${RULES.PIZZA_WEEK_XP} XP</span>
+      <span class="chip ${pizza.won ? 'win' : ''}">Pizza <b>${pizza.done}/${pizza.total}</b> at ${goal} XP${excusedDays.length
+        ? ` <span title="${esc(excusedDays.map(shortDay).join(', '))}">(${excusedDays.length} class excused day${excusedDays.length > 1 ? 's' : ''})</span>` : ''}</span>
       <span class="chip ${stale ? 'stale' : ''}">${last ? `Synced ${esc(last.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}` : 'Never synced'}</span>
     </div>
     <main class="board">
@@ -122,7 +125,7 @@ function render() {
           const w = weeks[k.id];
           return `<div class="kid">${esc(kidName(k))}</div>
             ${w.cards.map(c => cardHtml(c, { kidId: k.id })).join('')}
-            ${smoothieHtml(w)}${funFridayHtml(w)}${weekXpHtml(w)}`;
+            ${smoothieHtml(w)}${funFridayHtml(w)}${weekXpHtml(w, goal)}`;
         }).join('') : `<div style="grid-column:1/-1" class="chip">No kids yet. Press Sync to bring your class in from Timeback.</div>`}
       </div>
     </main>`;

@@ -25,7 +25,9 @@ tests/rules.test.mjs  rules tests with made-up data  (npm test)
 - **Fun Friday** 4 of 5 days with the *All Subjects* accuracy ring *above* 80% that day. All Subjects = the average of each subject's accuracy (each subject counts equally; subjects with no questions that day are left out). Short weeks allow the same one miss (4 counted days → 3 needed).
 - **Pizza** every kid on the board reaches 600 XP in the week. Each No school day, and each school day the whole class is marked Excused, takes 120 off the goal (one day → 480, two → 360; a day that is both counts once).
 
-## Setup (nothing here is done yet)
+- **Handwriting** XP isn't counted in the daily total, the week total or Pizza (`XP_EXCLUDED_SUBJECTS` in `mojo/app.js`). Its ring and accuracy still show.
+
+## Setup
 
 1. **Create a Supabase project.** SQL Editor → paste `supabase/schema.sql` → Run.
 2. **Turn on Google sign-in.** Authentication → Providers → Google (needs a Google OAuth client). Under Authentication → URL Configuration add the site URL and redirect URLs for `/mojo`, `/house` and `/house/guide`.

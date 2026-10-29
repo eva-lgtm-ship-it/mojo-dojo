@@ -47,6 +47,7 @@ export function dayDetailHtml(c, title) {
     c.excused && 'Excused: left out of the smoothie and Fun Friday count.',
     c.appsOut.length && `App out: ${c.appsOut.join(', ')}.`,
     c.covers.length > 1 && 'Includes weekend work.',
+    ...Object.entries(c.notCounted || {}).map(([s, v]) => `${s} XP (${v}) isn't counted in the total.`),
   ].filter(Boolean);
   return `
     <h3>${esc(title)}</h3>

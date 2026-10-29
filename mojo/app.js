@@ -40,6 +40,10 @@ export const RULES = {
   // one such day → 480, two → 360. A day that is both counts once.
   PIZZA_EXCUSED_DAY_XP: 120,
 
+  // Subjects whose XP is left out of the daily total, the week total and Pizza.
+  // (Their rings and accuracy still show.) Add a name here to leave out another.
+  XP_EXCLUDED_SUBJECTS: ['Handwriting'],
+
   // Kid page is locked during Core Skills blocks on weekdays (local time).
   CORE_SKILLS_LOCK: [['09:00', '10:10'], ['10:30', '11:40']],
 
@@ -66,6 +70,8 @@ export function rulesInWords(r = RULES) {
     `Smoothie: every counted day of the week is Epic. Excused and no-school days don't count.`,
     `Fun Friday: ${r.FUN_FRIDAY.daysNeeded} of 5 days with accuracy above ${pct(r.FUN_FRIDAY.accuracyAbove)} on the All Subjects ring, the average of each subject's accuracy that day (one miss allowed in short weeks).`,
     `Pizza: everyone on the board reaches ${r.PIZZA_WEEK_XP} XP in the week, ${r.PIZZA_EXCUSED_DAY_XP} less for each No school day or day the whole class is excused (one day →${r.PIZZA_WEEK_XP - r.PIZZA_EXCUSED_DAY_XP}).`,
+    ...((r.XP_EXCLUDED_SUBJECTS || []).length
+      ? [`${r.XP_EXCLUDED_SUBJECTS.join(' and ')} XP isn't counted in the daily total, the week total or Pizza.`] : []),
     `Time icon: ${r.TIME_ICON_MINUTES} active minutes. Accuracy icon: ${pct(r.ACCURACY_ICON)}+ across every question.`,
   ];
 }
@@ -189,7 +195,8 @@ export function evalCard({ card, rows, kid, flag, classDay, todayStr }, r = RULE
   const rings = ringsFor({ goals, subjects, kid, appsOut });
 
   const all = Object.values(subjects);
-  const xp = Math.round(all.reduce((a, m) => a + m.xp, 0));
+  const xp = countedXp(subjects, r);
+  const notCounted = excludedXp(subjects, r);
   const minutes = Math.round(all.reduce((a, m) => a + m.minutes, 0));
   const questions = all.reduce((a, m) => a + m.questions, 0);
   const correct = all.reduce((a, m) => a + m.correct, 0);
@@ -212,6 +219,7 @@ export function evalCard({ card, rows, kid, flag, classDay, todayStr }, r = RULE
     xp, minutes, questions, correct, accuracy, rings, ringsOk,
     timeIcon: minutes >= r.TIME_ICON_MINUTES,
     accIcon: accuracy !== null && accuracy >= r.ACCURACY_ICON,
+    notCounted,
     allSubjectsAcc: allSubjectsAccuracy(subjects),
     funDay: funFridayDay(subjects, r),
     pass: !!f.pass, test, autoTest: tests > 0 && !f.test, excused: !!f.excused,
@@ -251,11 +259,30 @@ export function evalWeek(cards, todayStr, r = RULES) {
   return { smoothie, funFriday };
 }
 
-/** Week XP for one kid: every calendar date in the week, weekends included. */
-export function weekXp(dayRows) {
+/** XP that counts toward totals: every subject except XP_EXCLUDED_SUBJECTS. */
+export function countedXp(subjects, r = RULES) {
+  const skip = new Set(r.XP_EXCLUDED_SUBJECTS || []);
   let t = 0;
-  for (const row of dayRows) for (const m of Object.values(row.subjects || {})) t += num(m.xp);
+  // values may be {xp, …} rows or plain XP numbers
+  for (const [name, m] of Object.entries(subjects || {}))
+    if (!skip.has(name)) t += num(typeof m === 'object' && m ? m.xp : m);
   return Math.round(t);
+}
+
+/** XP from excluded subjects, by subject, for showing "not counted" notes. */
+export function excludedXp(subjects, r = RULES) {
+  const out = {};
+  for (const name of r.XP_EXCLUDED_SUBJECTS || []) {
+    const m = (subjects || {})[name];
+    const v = Math.round(num(typeof m === 'object' && m ? m.xp : m));
+    if (v) out[name] = v;
+  }
+  return out;
+}
+
+/** Week XP for one kid: every calendar date in the week, weekends included. */
+export function weekXp(dayRows, r = RULES) {
+  return dayRows.reduce((t, row) => t + countedXp(row.subjects, r), 0);
 }
 
 /** Pizza: whole class. xps = one week total per kid on the board. */

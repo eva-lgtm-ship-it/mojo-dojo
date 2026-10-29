@@ -1,6 +1,6 @@
 // Run with: node tests/rules.test.mjs   (made-up sample data only)
 import assert from 'node:assert/strict';
-import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, funFridayDay, allSubjectsAccuracy,
+import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, countedXp, excludedXp, funFridayDay, allSubjectsAccuracy,
   lockedNow, todayLine } from '../mojo/app.js';
 
 const kid = { rings_off: [], language_with_reading: false, open_subjects: ['Math', 'Reading'],
@@ -122,6 +122,19 @@ assert.equal(lockedNow(new Date(2026, 9, 18, 9, 30)), null);   // Sunday
 // Kid words
 w = buildKidWeek({ kid, days: [row('2026-10-19', sub(60, 40))], flags: [], classDays: [], start, todayStr: '2026-10-19' });
 assert.match(todayLine(w.cards[1]), /20 XP to a Minimum day.*Reading 20 more/);
+
+// Handwriting XP is left out of the daily total, the week total and Pizza
+const hw = { Math: { xp: 80, questions: 10, correct: 9, minutes: 30 }, Reading: { xp: 60, questions: 10, correct: 9, minutes: 20 },
+  Handwriting: { xp: 40, questions: 0, correct: 0, minutes: 15 } };
+assert.equal(countedXp(hw), 140);
+assert.deepEqual(excludedXp(hw), { Handwriting: 40 });
+assert.equal(countedXp({ Math: 50, Handwriting: 20 }), 50);              // plain numbers (kid page classmates)
+w = buildKidWeek({ kid, days: [row('2026-10-19', hw)], flags: [], classDays: [], start, todayStr: '2026-10-20' });
+assert.equal(w.cards[1].xp, 140);
+assert.equal(w.cards[1].tier, 'minimum');                                  // 180 with Handwriting would be Epic
+assert.equal(w.weekXp, 140);
+assert.equal(w.cards[1].minutes, 65);                                      // minutes still include it
+assert.equal(countedXp(hw, { ...RULES, XP_EXCLUDED_SUBJECTS: [] }), 180);  // easy to switch back
 
 assert.equal(RULES.EPIC_XP, 145);
 console.log('all rules tests passed');

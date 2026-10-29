@@ -300,6 +300,24 @@ begin
         where k.active and not k.hidden
         group by k.id
       ) t), '[]'),
+    -- anonymous: per visible classmate, week XP by subject {subject: xp}, no ids, no names.
+    -- The kid page applies app.js rules (e.g. XP_EXCLUDED_SUBJECTS) to these.
+    'class_week_subject_xp', coalesce((
+      select jsonb_agg(t.by_subject order by t.total)
+      from (
+        select k.id,
+               coalesce(jsonb_object_agg(s.subject, s.xp) filter (where s.subject is not null), '{}'::jsonb) as by_subject,
+               coalesce(sum(s.xp), 0) as total
+        from public.kids k
+        left join (
+          select d.kid_id, v.key as subject, sum((v.value ->> 'xp')::numeric) as xp
+          from public.days d, lateral jsonb_each(d.subjects) v
+          where d.day between p_from and p_to
+          group by d.kid_id, v.key
+        ) s on s.kid_id = k.id
+        where k.active and not k.hidden
+        group by k.id
+      ) t), '[]'),
     -- dates when EVERY kid on the board was excused (dates only, no names); lowers the Pizza goal
     'all_excused_days', coalesce((
       select jsonb_agg(e.day order by e.day)

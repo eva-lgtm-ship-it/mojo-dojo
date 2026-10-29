@@ -45,7 +45,7 @@
 <dialog id="dlg"><div class="panel" id="dlgBody"></div><div class="closebar"><button class="btn" id="dlgClose">Close</button></div></dialog>
 
 <script type="module">
-import { RULES, today, weekStartOf, addDays, shortDay, buildKidWeek, pizzaStatus, pizzaGoal, pizzaOffDays, todayLine,
+import { RULES, today, weekStartOf, addDays, shortDay, buildKidWeek, pizzaStatus, pizzaGoal, pizzaOffDays, countedXp, todayLine,
   lockedNow, esc, supa, session, signInCard } from '/mojo/app.js';
 import { cardHtml, dayDetailHtml } from '/mojo/ui.js';
 
@@ -100,7 +100,11 @@ async function load() {
   card = week.cards.find(c => c.phase === 'today') || null;
   // No school days + whole-class excused days this week lower the Pizza goal
   const offDays = pizzaOffDays({ excusedDays: data.all_excused_days || [], classDays: data.class_days, start });
-  const pizza = pizzaStatus(data.class_week_xp, pizzaGoal(offDays.length));
+  // classmates' week XP by subject, counted with the same rules as the board
+  const classXps = data.class_week_subject_xp
+    ? data.class_week_subject_xp.map(s => countedXp(s))
+    : data.class_week_xp;   // older database function: plain totals
+  const pizza = pizzaStatus(classXps, pizzaGoal(offDays.length));
   const calls = data.flags.filter(f => f.call_time && f.day >= t).sort((a, b) => a.day.localeCompare(b.day));
   render(kid, start, pizza, calls, data.synced_at);
 }

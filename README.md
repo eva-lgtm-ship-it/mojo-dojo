@@ -27,6 +27,8 @@ tests/rules.test.mjs  rules tests with made-up data  (npm test)
 
 - **Handwriting** XP isn't counted in the daily total, the week total or Pizza (`XP_EXCLUDED_SUBJECTS` in `mojo/app.js`). Its ring and accuracy still show.
 
+- **Mobile Squad** each kid's XP from 10/19 to 12/18 (both days included, weekends too, Handwriting left out) against 4,800 (`MOBILE_SQUAD` in `mojo/app.js`). Shown as a column on the board and a section on the kid page.
+
 ## Setup
 
 1. **Create a Supabase project.** SQL Editor → paste `supabase/schema.sql` → Run.

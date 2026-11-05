@@ -44,6 +44,10 @@ export const RULES = {
   // (Their rings and accuracy still show.) Add a name here to leave out another.
   XP_EXCLUDED_SUBJECTS: ['Handwriting'],
 
+  // Mobile Squad (per kid, whole session): counted XP from start to end
+  // (both dates included, weekends too; XP_EXCLUDED_SUBJECTS left out) ÷ goalXp.
+  MOBILE_SQUAD: { start: '2026-10-19', end: '2026-12-18', goalXp: 4800 },
+
   // Kid page is locked during Core Skills blocks on weekdays (local time).
   CORE_SKILLS_LOCK: [['09:00', '10:10'], ['10:30', '11:40']],
 
@@ -71,7 +75,8 @@ export function rulesInWords(r = RULES) {
     `Fun Friday: ${r.FUN_FRIDAY.daysNeeded} of 5 days with accuracy above ${pct(r.FUN_FRIDAY.accuracyAbove)} on the All Subjects ring, the average of each subject's accuracy that day (one miss allowed in short weeks).`,
     `Pizza: everyone on the board reaches ${r.PIZZA_WEEK_XP} XP in the week, ${r.PIZZA_EXCUSED_DAY_XP} less for each No school day or day the whole class is excused (one day →${r.PIZZA_WEEK_XP - r.PIZZA_EXCUSED_DAY_XP}).`,
     ...((r.XP_EXCLUDED_SUBJECTS || []).length
-      ? [`${r.XP_EXCLUDED_SUBJECTS.join(' and ')} XP isn't counted in the daily total, the week total or Pizza.`] : []),
+      ? [`${r.XP_EXCLUDED_SUBJECTS.join(' and ')} XP isn't counted in the daily total, the week total, Pizza or Mobile Squad.`] : []),
+    `Mobile Squad: ${r.MOBILE_SQUAD.goalXp.toLocaleString()} XP from ${shortDay(r.MOBILE_SQUAD.start)} to ${shortDay(r.MOBILE_SQUAD.end)}, each kid on their own.`,
     `Time icon: ${r.TIME_ICON_MINUTES} active minutes. Accuracy icon: ${pct(r.ACCURACY_ICON)}+ across every question.`,
   ];
 }
@@ -280,6 +285,27 @@ export function excludedXp(subjects, r = RULES) {
   return out;
 }
 
+/**
+ * Mobile Squad progress for one kid.
+ *  dayRows — that kid's days rows (any range; only start…end are counted)
+ */
+export function mobileSquad(dayRows, todayStr, r = RULES) {
+  const { start, end, goalXp } = r.MOBILE_SQUAD;
+  const xp = dayRows.filter(d => d.day >= start && d.day <= end)
+    .reduce((t, row) => t + countedXp(row.subjects, r), 0);
+  let schoolDaysLeft = 0;   // weekdays after today, through the end date
+  for (let d = todayStr > start ? addDays(todayStr, 1) : start; d <= end; d = addDays(d, 1))
+    if (dow(d) !== 0 && dow(d) !== 6) schoolDaysLeft++;
+  return {
+    xp, goal: goalXp, start, end,
+    pct: goalXp ? Math.min(100, Math.round(xp / goalXp * 100)) : 0,
+    toGo: Math.max(0, goalXp - xp),
+    done: xp >= goalXp,
+    schoolDaysLeft,
+    over: todayStr > end,
+  };
+}
+
 /** Week XP for one kid: every calendar date in the week, weekends included. */
 export function weekXp(dayRows, r = RULES) {
   return dayRows.reduce((t, row) => t + countedXp(row.subjects, r), 0);
@@ -450,6 +476,17 @@ export async function isGuide(sb) {
   return !error && data === true;
 }
 
+/** Read every matching row, 1000 at a time (Supabase caps each request). */
+async function selectAll(sb, table, cols, filter) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await filter(sb.from(table).select(cols)).order('day').range(from, from + 999);
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < 1000) return out;
+  }
+}
+
 /** Everything the guide screens need for one week. */
 export async function loadWeek(sb, start) {
   const end = addDays(start, 6);
@@ -462,8 +499,10 @@ export async function loadWeek(sb, start) {
     sb.from('settings').select('*'),
   ]);
   for (const r of [kids, days, flags, classDays, sync, settings]) if (r.error) throw r.error;
+  const squadDays = await selectAll(sb, 'days', 'kid_id,day,subjects',
+    q => q.gte('day', RULES.MOBILE_SQUAD.start).lte('day', RULES.MOBILE_SQUAD.end));
   return {
-    kids: kids.data, days: days.data, flags: flags.data, classDays: classDays.data,
+    kids: kids.data, days: days.data, flags: flags.data, classDays: classDays.data, squadDays,
     lastSync: sync.data[0] || null,
     settings: Object.fromEntries(settings.data.map(s => [s.key, s.value])),
   };

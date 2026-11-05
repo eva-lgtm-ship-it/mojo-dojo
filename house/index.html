@@ -45,7 +45,7 @@
 <dialog id="dlg"><div class="panel" id="dlgBody"></div><div class="closebar"><button class="btn" id="dlgClose">Close</button></div></dialog>
 
 <script type="module">
-import { RULES, today, weekStartOf, addDays, shortDay, buildKidWeek, pizzaStatus, pizzaGoal, pizzaOffDays, countedXp, todayLine,
+import { RULES, today, weekStartOf, addDays, shortDay, buildKidWeek, pizzaStatus, pizzaGoal, pizzaOffDays, countedXp, mobileSquad, todayLine,
   lockedNow, esc, supa, session, signInCard } from '/mojo/app.js';
 import { cardHtml, dayDetailHtml } from '/mojo/ui.js';
 
@@ -106,7 +106,26 @@ async function load() {
     : data.class_week_xp;   // older database function: plain totals
   const pizza = pizzaStatus(classXps, pizzaGoal(offDays.length));
   const calls = data.flags.filter(f => f.call_time && f.day >= t).sort((a, b) => a.day.localeCompare(b.day));
+  // Mobile Squad: this kid's own days across the whole session
+  const MS = RULES.MOBILE_SQUAD;
+  const ms = await sb.rpc('house_card', { p_from: MS.start, p_to: MS.end });
+  squad = ms.error || !ms.data.found ? null : mobileSquad(ms.data.days, t);
   render(kid, start, pizza, calls, data.synced_at);
+}
+
+let squad = null;
+function squadHtml() {
+  if (!squad) return '';
+  const m = squad;
+  const text = m.done ? 'You made Mobile Squad!'
+    : m.over ? `You reached ${m.xp.toLocaleString()} XP this session.`
+    : `${m.toGo.toLocaleString()} XP to go · ${m.schoolDaysLeft} school day${m.schoolDaysLeft === 1 ? '' : 's'} left` +
+      (m.schoolDaysLeft ? ` (about ${Math.ceil(m.toGo / m.schoolDaysLeft)} XP a day)` : '');
+  return `<h2 class="h">Mobile Squad · ${esc(shortDay(m.start))} – ${esc(shortDay(m.end))}</h2>
+    <div class="reward ${m.done ? 'won' : ''}">
+      <div class="big">${m.xp.toLocaleString()} / ${m.goal.toLocaleString()} XP</div>
+      <p>${esc(text)}</p>
+      <div class="bar"><i style="width:${m.pct}%"></i></div></div>`;
 }
 
 function render(kid, start, pizza, calls, syncedAt) {
@@ -145,6 +164,8 @@ function render(kid, start, pizza, calls, syncedAt) {
           <div class="big">${mine} XP</div><p>${esc(pizzaText)}</p>
           <div class="bar"><i style="width:${Math.min(100, Math.round(mine / Math.max(1, pizza.goal) * 100))}%"></i></div></div>
       </div>
+
+      ${squadHtml()}
 
       <h2 class="h">From my guide</h2>
       <div class="two">

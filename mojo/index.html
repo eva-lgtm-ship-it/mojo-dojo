@@ -14,10 +14,10 @@
 <aside class="drawer" id="drawer" aria-label="Guide settings"></aside>
 
 <script type="module">
-import { RULES, today, weekStartOf, addDays, shortDay, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays,
+import { RULES, today, weekStartOf, addDays, shortDay, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, mobileSquad,
   rulesInWords, esc, kidName, supa, session, isGuide, loadWeek, signInCard, forgetConfig, SUBJECT_ORDER }
   from '/mojo/app.js';
-import { cardHtml, dayDetailHtml, smoothieHtml, funFridayHtml, weekXpHtml, toast } from '/mojo/ui.js';
+import { cardHtml, dayDetailHtml, smoothieHtml, funFridayHtml, weekXpHtml, mobileSquadHtml, toast } from '/mojo/ui.js';
 
 const TIMEBACK = 'https://alpha.timeback.com';
 const root = document.getElementById('app');
@@ -88,6 +88,8 @@ function render() {
     excusedDays: allExcusedDays({ kidIds: kids.map(k => k.id), flags: data.flags, start }),
     classDays: data.classDays, start });
   const goal = pizzaGoal(offDays.length);
+  const squad = Object.fromEntries(kids.map(k => [k.id,
+    mobileSquad(data.squadDays.filter(d => d.kid_id === k.id), today())]));
   const pizza = pizzaStatus(kids.map(k => weeks[k.id].weekXp), goal);
   const last = data.lastSync ? new Date(data.lastSync.ran_at) : null;
   const stale = !last || (Date.now() - last) / 36e5 > RULES.STALE_AFTER_HOURS;
@@ -115,19 +117,19 @@ function render() {
       <span class="chip ${stale ? 'stale' : ''}">${last ? `Synced ${esc(last.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}` : 'Never synced'}</span>
     </div>
     <main class="board">
-      <div class="grid" style="grid-template-columns:170px repeat(${cards.length},minmax(110px,1fr)) repeat(3,112px)">
+      <div class="grid" style="grid-template-columns:170px repeat(${cards.length},minmax(110px,1fr)) repeat(4,112px)">
         <div class="head">Kid</div>
         ${cards.map(c => {
           const ns = classBy[c.date] && classBy[c.date].no_school;
           return `<button class="head dayhead ${ns ? 'noschool' : ''}" data-head="${c.date}"
             title="Tap to ${ns ? 'undo' : 'mark'} no school">${esc(shortDay(c.date))}${c.covers.length > 1 ? ' +wknd' : ''}${ns ? ' · no school' : ''}</button>`;
         }).join('')}
-        <div class="head">Smoothie</div><div class="head">Fun Friday</div><div class="head">Week XP</div>
+        <div class="head">Smoothie</div><div class="head">Fun Friday</div><div class="head">Week XP</div><div class="head">Mobile Squad</div>
         ${kids.length ? kids.map(k => {
           const w = weeks[k.id];
           return `<div class="kid">${esc(kidName(k))}</div>
             ${w.cards.map(c => cardHtml(c, { kidId: k.id })).join('')}
-            ${smoothieHtml(w)}${funFridayHtml(w)}${weekXpHtml(w, goal)}`;
+            ${smoothieHtml(w)}${funFridayHtml(w)}${weekXpHtml(w, goal)}${mobileSquadHtml(squad[k.id])}`;
         }).join('') : `<div style="grid-column:1/-1" class="chip">No kids yet. Press Sync to bring your class in from Timeback.</div>`}
       </div>
     </main>`;
@@ -228,7 +230,7 @@ function startSync() {
   const until = Date.now() + 10 * 60_000;
   helloTimer = setInterval(() => {
     if (tab.closed || Date.now() > until) return clearInterval(helloTimer);
-    try { tab.postMessage({ type: 'mojo-hello', classMatch: match }, TIMEBACK); } catch {}
+    try { tab.postMessage({ type: 'mojo-hello', classMatch: match, since: RULES.MOBILE_SQUAD.start }, TIMEBACK); } catch {}
   }, 1000);
   toast('Timeback opened. When it has loaded, click your “Mojo sync” bookmark there.', 6000);
 }

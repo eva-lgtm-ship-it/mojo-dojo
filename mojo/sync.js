@@ -37,7 +37,7 @@
   const hello = new Promise(res => {
     const on = e => {
       if (!e.data || e.data.type !== 'mojo-hello') return;
-      board = { origin: e.origin, classMatch: e.data.classMatch || '' };
+      board = { origin: e.origin, classMatch: e.data.classMatch || '', since: /^\d{4}-\d{2}-\d{2}$/.test(e.data.since || '') ? e.data.since : '' };
       window.removeEventListener('message', on);
       res();
     };
@@ -133,6 +133,13 @@
 
     /* 3. Per-day, per-subject metrics */
     const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - DAYS_BACK);
+    /* reach back further when the board asks (e.g. to the start of Mobile Squad), at most 90 days */
+    if (board && board.since) {
+      const [y, mo, d] = board.since.split('-').map(Number);
+      const since = new Date(y, mo - 1, d);
+      const floor = new Date(); floor.setHours(0, 0, 0, 0); floor.setDate(floor.getDate() - 90);
+      if (since < start) start.setTime(Math.max(since.getTime(), floor.getTime()));
+    }
     const mr = await call(FN.metrics, { studentIds: ids, startDate: start.toISOString(), endDate: new Date().toISOString() });
     const days = {};   /* "kid|day" → row */
     let shown = false;

@@ -1,6 +1,6 @@
 // Run with: node tests/rules.test.mjs   (made-up sample data only)
 import assert from 'node:assert/strict';
-import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, countedXp, excludedXp, funFridayDay, allSubjectsAccuracy,
+import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, countedXp, excludedXp, mobileSquad, funFridayDay, allSubjectsAccuracy,
   lockedNow, todayLine } from '../mojo/app.js';
 
 const kid = { rings_off: [], language_with_reading: false, open_subjects: ['Math', 'Reading'],
@@ -135,6 +135,27 @@ assert.equal(w.cards[1].tier, 'minimum');                                  // 18
 assert.equal(w.weekXp, 140);
 assert.equal(w.cards[1].minutes, 65);                                      // minutes still include it
 assert.equal(countedXp(hw, { ...RULES, XP_EXCLUDED_SUBJECTS: [] }), 180);  // easy to switch back
+
+// Mobile Squad: counted XP 10/19–12/18 (Handwriting out) against 4800
+const msDays = [
+  { day: '2026-10-18', subjects: { Math: { xp: 500 } } },                              // before start → out
+  { day: '2026-10-19', subjects: { Math: { xp: 100 }, Handwriting: { xp: 50 } } },    // 100
+  { day: '2026-10-25', subjects: { Reading: { xp: 40 } } },                            // weekend inside → in
+  { day: '2026-12-18', subjects: { Math: { xp: 60 } } },                               // end date → in
+  { day: '2026-12-19', subjects: { Math: { xp: 999 } } },                              // after end → out
+];
+let ms = mobileSquad(msDays, '2026-11-04');
+assert.equal(ms.xp, 200);
+assert.equal(ms.goal, 4800);
+assert.equal(ms.toGo, 4600);
+assert.equal(ms.pct, 4);
+assert.equal(ms.done, false);
+assert.equal(ms.schoolDaysLeft, 32);   // Thu 11/5 … Fri 12/18 weekdays
+ms = mobileSquad([{ day: '2026-11-02', subjects: { Math: { xp: 4800 } } }], '2026-11-04');
+assert.equal(ms.done, true);
+assert.equal(ms.pct, 100);
+assert.equal(mobileSquad([], '2026-12-21').over, true);
+assert.equal(mobileSquad([], '2026-12-21').schoolDaysLeft, 0);
 
 assert.equal(RULES.EPIC_XP, 145);
 console.log('all rules tests passed');

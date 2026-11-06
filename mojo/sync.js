@@ -62,6 +62,8 @@
     goals:   'src_features_goals_actions_goals-batch-api_ts--getStudentSubjectGoalsBatch_createServerFn_handler',
     tests:   'src_features_teacher_actions_getAssignedTestsBatch_ts--getAssignedTestsBatch_createServerFn_handler',
     enroll:  'src_features_teacher_actions_getEnrollmentsForMultipleStudents_ts--getEnrollmentsForMultipleStudents_createServerFn_handler',
+    /* one student at a time; unlike the batch call it includes timeSpentMetrics (minutes) */
+    single:  'src_features_learning-metrics_actions_getActivityMetrics_ts--getActivityMetrics_createServerFn_handler',
   };
 
   /* Metric field names vary a little; take the first one that's there. */
@@ -161,6 +163,35 @@
         }
       }
     }
+
+    /* 3b. Active minutes: the batch call leaves them out, so ask per student (4 at a time) */
+    toast('Mojo sync: reading active minutes…');
+    let minutesFound = 0, minutesFailed = 0;
+    const queue = ids.slice();
+    const worker = async () => {
+      while (queue.length) {
+        const id = queue.shift();
+        try {
+          const one = await call(FN.single, { studentId: id, startDate: start.toISOString(), endDate: new Date().toISOString() });
+          const facts = (one && one.data && one.data.facts) || {};
+          for (const [k, perSubject] of Object.entries(facts)) {
+            const day = dayKey(k);
+            const row = days[id + '|' + day] || (days[id + '|' + day] = { kid: id, day, subjects: {}, tests: 0 });
+            for (const [subject, s] of Object.entries(perSubject || {})) {
+              const secs = pick(s.timeSpentMetrics || {}, ['activeSeconds']);
+              const am = s.activityMetrics || {};
+              const sub = row.subjects[subject] || (row.subjects[subject] = {
+                xp: pick(am, ['xpEarned']), questions: pick(am, ['totalQuestions']),
+                correct: pick(am, ['correctQuestions']), minutes: 0 });
+              sub.minutes = secs / 60;
+              if (secs) minutesFound++;
+            }
+          }
+        } catch (e) { minutesFailed++; console.warn('[Mojo sync] minutes skipped for one student:', e.message); }
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    console.log('[Mojo sync] minutes found for', minutesFound, 'subject-days;', minutesFailed, 'students failed');
 
     /* 4. Tests finished in Timeback, counted on the day they were done */
     try {

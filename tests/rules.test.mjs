@@ -5,9 +5,9 @@ import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, al
 
 const kid = { rings_off: [], language_with_reading: false, open_subjects: ['Math', 'Reading'],
   goals: { Math: 60, Reading: 60 } };
-const sub = (mxp, rxp, q = 20, c = 18) => ({
-  Math: { xp: mxp, questions: q, correct: c, minutes: 30 },
-  Reading: { xp: rxp, questions: q, correct: c, minutes: 30 } });
+const sub = (mxp, rxp, q = 20, c = 18, min = 60) => ({
+  Math: { xp: mxp, questions: q, correct: c, minutes: min },
+  Reading: { xp: rxp, questions: q, correct: c, minutes: min } });
 const row = (day, s, tests = 0) => ({ day, subjects: s, goals: kid.goals, tests });
 
 // Week starts Friday; Oct 18 2026 is a Sunday → week of Fri Oct 16
@@ -156,6 +156,24 @@ assert.equal(ms.done, true);
 assert.equal(ms.pct, 100);
 assert.equal(mobileSquad([], '2026-12-21').over, true);
 assert.equal(mobileSquad([], '2026-12-21').schoolDaysLeft, 0);
+
+// Minutes ring: active minutes reach the sum of the day's subject goals (60 + 60 = 120)
+w = buildKidWeek({ kid, days: [row('2026-10-19', sub(80, 70, 10, 9, 60))], flags: [], classDays: [], start, todayStr: '2026-10-20' });
+assert.equal(w.cards[1].minutesGoal, 120);
+assert.equal(w.cards[1].minutesRing, true);
+assert.equal(w.cards[1].funDay, true);                 // 90% accuracy + 120 minutes
+w = buildKidWeek({ kid, days: [row('2026-10-19', sub(80, 70, 10, 9, 59))], flags: [], classDays: [], start, todayStr: '2026-10-20' });
+assert.equal(w.cards[1].minutesRing, false);           // 118 minutes
+assert.equal(w.cards[1].funDay, false);                // accuracy alone isn't enough now
+w = buildKidWeek({ kid, days: [row('2026-10-19', sub(80, 70, 10, 7, 90))], flags: [], classDays: [], start, todayStr: '2026-10-20' });
+assert.equal(w.cards[1].funDay, false);                // minutes closed but 70% accuracy
+// App out takes that subject's goal off the minutes target: Reading out → 60 needed
+w = buildKidWeek({ kid, days: [row('2026-10-19', sub(80, 70, 10, 9, 31))], flags: [{ day: '2026-10-19', apps_out: ['Reading'] }], classDays: [], start, todayStr: '2026-10-20' });
+assert.equal(w.cards[1].minutesGoal, 60);
+assert.equal(w.cards[1].minutesRing, true);
+// No goals synced → falls back to 120
+w = buildKidWeek({ kid: { ...kid, goals: {} }, days: [{ day: '2026-10-19', subjects: sub(80, 70), goals: {}, tests: 0 }], flags: [], classDays: [], start, todayStr: '2026-10-20' });
+assert.equal(w.cards[1].minutesGoal, 120);
 
 assert.equal(RULES.EPIC_XP, 145);
 console.log('all rules tests passed');

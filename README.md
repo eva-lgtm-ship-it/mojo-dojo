@@ -22,7 +22,7 @@ tests/rules.test.mjs  rules tests with made-up data  (npm test)
 - **Epic** 145+ XP, **Minimum** 120–144 XP — both need every ring closed (Day pass / Test day lets rings stay open).
 - **Week** Friday → Thursday; Saturday and Sunday work counts toward Friday.
 - **Smoothie** every counted day Epic; excused and no-school days aren't counted.
-- **Fun Friday** 4 of 5 days with the *All Subjects* accuracy ring *above* 80% that day. All Subjects = the average of each subject's accuracy (each subject counts equally; subjects with no questions that day are left out). Short weeks allow the same one miss (4 counted days → 3 needed).
+- **Fun Friday** 4 of 5 days with the *All Subjects* accuracy ring *above* 80% that day. All Subjects = the average of each subject's accuracy (each subject counts equally; subjects with no questions that day are left out). The day's minutes ring must be closed too: active minutes reach the sum of that day's subject goals (120 for most kids; apps marked out come off). Short weeks allow the same one miss (4 counted days → 3 needed).
 - **Pizza** every kid on the board reaches 600 XP in the week. Each No school day, and each school day the whole class is marked Excused, takes 120 off the goal (one day → 480, two → 360; a day that is both counts once).
 
 - **Handwriting** XP isn't counted in the daily total, the week total or Pizza (`XP_EXCLUDED_SUBJECTS` in `mojo/app.js`). Its ring and accuracy still show.

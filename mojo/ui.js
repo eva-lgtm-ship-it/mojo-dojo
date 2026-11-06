@@ -54,7 +54,7 @@ export function dayDetailHtml(c, title) {
     <p class="sub">${esc(shortDay(c.date))} · ${c.tier === 'notyet' ? 'Not yet' : tierLabel(c.tier) + ' day'} · All Subjects accuracy ${pct(c.allSubjectsAcc)}${c.funDay ? ' ✓ Fun Friday' : ''}</p>
     <div class="stats">
       <div class="stat"><b>${c.xp}</b><span>XP</span></div>
-      <div class="stat"><b>${c.minutes}</b><span>Minutes${c.timeIcon ? ' ✓' : ''}</span></div>
+      <div class="stat"><b>${c.minutes}<small style="font-size:13px;font-weight:700"> / ${c.minutesGoal}</small></b><span>Minutes${c.minutesRing ? ' ✓' : ''}</span></div>
       <div class="stat"><b>${pct(c.accuracy)}</b><span>Accuracy${c.accIcon ? ' ✓' : ''}</span></div>
     </div>
     <div class="ringlist">${rings}</div>
@@ -72,7 +72,7 @@ export function funFridayHtml(w) {
   const f = w.funFriday;
   const cls = f.status === 'won' ? 'won' : f.status === 'out' ? 'out' : '';
   return `<div class="wk ${cls}"><span class="big">${Math.min(f.qualifying, f.needed)}/${f.needed}</span>
-    <span class="small">${f.status === 'won' ? 'Fun Friday!' : f.status === 'out' ? 'not this week' : 'days >80%'}</span></div>`;
+    <span class="small">${f.status === 'won' ? 'Fun Friday!' : f.status === 'out' ? 'not this week' : 'good days'}</span></div>`;
 }
 export function mobileSquadHtml(m) {
   return `<div class="wk ${m.done ? 'won' : ''}" title="${m.xp} of ${m.goal} XP, ${esc(shortDay(m.start))}–${esc(shortDay(m.end))}">

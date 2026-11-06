@@ -17,7 +17,11 @@ export const RULES = {
   WEEK_START_DOW: 5,          // 0 Sun … 5 Fri. The week runs Friday → Thursday.
   WEEKEND_INTO_FRIDAY: true,  // Saturday + Sunday work counts toward Friday's card
 
-  TIME_ICON_MINUTES: 120,     // Time icon: 120 active minutes that day, all subjects
+  // Minutes ring (Timeback's pink ring, All Subjects): closes when active minutes
+  // that day reach the kid's daily goal. Timeback sets each subject's minutes goal
+  // equal to its daily XP goal, so the target is the sum of that day's subject
+  // goals (apps marked out are taken off). This is the fallback if no goals synced.
+  TIME_ICON_MINUTES: 120,
   ACCURACY_ICON: 0.80,        // Accuracy icon: 80%+ across every question that day
 
   // Smoothie: every counted school day of the week is Epic.
@@ -31,7 +35,8 @@ export const RULES = {
   // A day with no questions at all doesn't qualify.
   // Short weeks (no-school / excused days removed) allow the same one miss:
   // 5 counted days → 4 needed, 4 → 3, 3 → 2.
-  FUN_FRIDAY: { accuracyAbove: 0.80, daysNeeded: 4, missesAllowed: 1 },
+  // ...and the day's minutes ring must be closed too (needMinutesRing).
+  FUN_FRIDAY: { accuracyAbove: 0.80, needMinutesRing: true, daysNeeded: 4, missesAllowed: 1 },
 
   // Pizza (whole class): every kid on the board reaches 600 XP in the week.
   PIZZA_WEEK_XP: 600,
@@ -72,12 +77,12 @@ export function rulesInWords(r = RULES) {
     `The week runs ${DOW[r.WEEK_START_DOW]} to ${DOW[(r.WEEK_START_DOW + 6) % 7]}` +
       (r.WEEKEND_INTO_FRIDAY ? '; Saturday and Sunday work counts toward Friday.' : '.'),
     `Smoothie: every counted day of the week is Epic. Excused and no-school days don't count.`,
-    `Fun Friday: ${r.FUN_FRIDAY.daysNeeded} of 5 days with accuracy above ${pct(r.FUN_FRIDAY.accuracyAbove)} on the All Subjects ring, the average of each subject's accuracy that day (one miss allowed in short weeks).`,
+    `Fun Friday: ${r.FUN_FRIDAY.daysNeeded} of 5 days with accuracy above ${pct(r.FUN_FRIDAY.accuracyAbove)} on the All Subjects ring, the average of each subject's accuracy that day${r.FUN_FRIDAY.needMinutesRing ? ', and the minutes ring closed' : ''} (one miss allowed in short weeks).`,
     `Pizza: everyone on the board reaches ${r.PIZZA_WEEK_XP} XP in the week, ${r.PIZZA_EXCUSED_DAY_XP} less for each No school day or day the whole class is excused (one day →${r.PIZZA_WEEK_XP - r.PIZZA_EXCUSED_DAY_XP}).`,
     ...((r.XP_EXCLUDED_SUBJECTS || []).length
       ? [`${r.XP_EXCLUDED_SUBJECTS.join(' and ')} XP isn't counted in the daily total, the week total, Pizza or Mobile Squad.`] : []),
     `Mobile Squad: ${r.MOBILE_SQUAD.goalXp.toLocaleString()} XP from ${shortDay(r.MOBILE_SQUAD.start)} to ${shortDay(r.MOBILE_SQUAD.end)}, each kid on their own.`,
-    `Time icon: ${r.TIME_ICON_MINUTES} active minutes. Accuracy icon: ${pct(r.ACCURACY_ICON)}+ across every question.`,
+    `Minutes ring: active minutes, all subjects, reach the day's goal (the sum of the subject goals, ${r.TIME_ICON_MINUTES} for most kids). Accuracy icon: ${pct(r.ACCURACY_ICON)}+ across every question.`,
   ];
 }
 
@@ -198,6 +203,10 @@ export function evalCard({ card, rows, kid, flag, classDay, todayStr }, r = RULE
   const goals = (first && first.goals && Object.keys(first.goals).length) ? first.goals : (kid.goals || {});
   const appsOut = [...(f.apps_out || []), ...(c.apps_out || [])];
   const rings = ringsFor({ goals, subjects, kid, appsOut });
+  const outSet = new Set(appsOut);
+  const goalSum = Object.entries(goals).filter(([name]) => !outSet.has(name))
+    .reduce((t, [, g]) => t + num(g), 0);
+  const minutesGoal = Math.round(goalSum) || r.TIME_ICON_MINUTES;
 
   const all = Object.values(subjects);
   const xp = countedXp(subjects, r);
@@ -222,11 +231,13 @@ export function evalCard({ card, rows, kid, flag, classDay, todayStr }, r = RULE
     date: card.date, covers: card.covers, phase,
     tier,                                   // what it is right now
     xp, minutes, questions, correct, accuracy, rings, ringsOk,
-    timeIcon: minutes >= r.TIME_ICON_MINUTES,
+    minutesGoal,
+    minutesRing: minutes >= minutesGoal,
+    timeIcon: minutes >= minutesGoal,
     accIcon: accuracy !== null && accuracy >= r.ACCURACY_ICON,
     notCounted,
     allSubjectsAcc: allSubjectsAccuracy(subjects),
-    funDay: funFridayDay(subjects, r),
+    funDay: funFridayDay(subjects, r) && (!r.FUN_FRIDAY.needMinutesRing || minutes >= minutesGoal),
     pass: !!f.pass, test, autoTest: tests > 0 && !f.test, excused: !!f.excused,
     appsOut, kidAppsOut: f.apps_out || [], callTime: f.call_time || null,
     noSchool: !!c.no_school,

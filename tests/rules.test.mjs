@@ -1,6 +1,6 @@
 // Run with: node tests/rules.test.mjs   (made-up sample data only)
 import assert from 'node:assert/strict';
-import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, countedXp, excludedXp, mobileSquad, funFridayDay, allSubjectsAccuracy,
+import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, countedXp, excludedXp, mobileSquad, ringsFor, funFridayDay, allSubjectsAccuracy,
   lockedNow, todayLine } from '../mojo/app.js';
 
 const kid = { rings_off: [], language_with_reading: false, open_subjects: ['Math', 'Reading'],
@@ -174,6 +174,13 @@ assert.equal(w.cards[1].minutesRing, true);
 // No goals synced → falls back to 120
 w = buildKidWeek({ kid: { ...kid, goals: {} }, days: [{ day: '2026-10-19', subjects: sub(80, 70), goals: {}, tests: 0 }], flags: [], classDays: [], start, todayStr: '2026-10-20' });
 assert.equal(w.cards[1].minutesGoal, 120);
+
+// Rings close on rounded XP, like Timeback: FastMath 9.87 of 10 → closed; 9.4 → open
+const fm = (x) => ringsFor({ goals: { FastMath: 10 }, subjects: { FastMath: { xp: x } }, kid: { open_subjects: ['FastMath'] } })[0];
+assert.equal(fm(9.87).closed, true);
+assert.equal(fm(9.87).xp, 10);
+assert.equal(fm(9.4).closed, false);
+assert.equal(fm(9.4).left, 1);
 
 assert.equal(RULES.EPIC_XP, 145);
 console.log('all rules tests passed');

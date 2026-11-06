@@ -158,8 +158,9 @@ export function ringsFor({ goals, subjects, kid, appsOut }) {
   return Object.entries(g)
     .filter(([name, goal]) => num(goal) > 0 && !off.has(name) && (open.has(name) || name in s))
     .map(([name, goal]) => {
-      const xp = num(s[name] && s[name].xp);
-      return { subject: name, goal: num(goal), xp: Math.round(xp), closed: xp >= num(goal),
+      // Timeback shows XP rounded (9.87 → 10) and closes the ring on that number, so we do too
+      const xp = Math.round(num(s[name] && s[name].xp));
+      return { subject: name, goal: num(goal), xp, closed: xp >= num(goal),
         left: Math.max(0, Math.ceil(num(goal) - xp)) };
     })
     .sort((a, b) => order(a.subject) - order(b.subject));

@@ -142,7 +142,10 @@
       const floor = new Date(); floor.setHours(0, 0, 0, 0); floor.setDate(floor.getDate() - 90);
       if (since < start) start.setTime(Math.max(since.getTime(), floor.getTime()));
     }
-    const mr = await call(FN.metrics, { studentIds: ids, startDate: start.toISOString(), endDate: new Date().toISOString() });
+    /* Timeback files days by UTC unless told a time zone; use this computer's (the campus's), so
+       work after 4 pm stays on the right day */
+    const TZ = (Intl.DateTimeFormat().resolvedOptions().timeZone) || 'America/Los_Angeles';
+    const mr = await call(FN.metrics, { studentIds: ids, startDate: start.toISOString(), endDate: new Date().toISOString(), timezone: TZ });
     const days = {};   /* "kid|day" → row */
     let shown = false;
     for (const m of ((mr.data && mr.data.metrics) || [])) {
@@ -172,7 +175,7 @@
       while (queue.length) {
         const id = queue.shift();
         try {
-          const one = await call(FN.single, { studentId: id, startDate: start.toISOString(), endDate: new Date().toISOString() });
+          const one = await call(FN.single, { studentId: id, startDate: start.toISOString(), endDate: new Date().toISOString(), timezone: TZ });
           const facts = (one && one.data && one.data.facts) || {};
           for (const [k, perSubject] of Object.entries(facts)) {
             const day = dayKey(k);
@@ -208,6 +211,13 @@
         }
       }
     } catch (e) { console.warn('[Mojo sync] tests skipped:', e.message); }
+
+    /* Every kid gets a row for every date in range, empty if no work: this clears rows an
+       older sync filed under the wrong date */
+    for (let d = new Date(start); d <= new Date(); d.setDate(d.getDate() + 1)) {
+      const day = ymd(d);
+      for (const id of ids) if (!days[id + '|' + day]) days[id + '|' + day] = { kid: id, day, subjects: {}, tests: 0 };
+    }
 
     const payload = { class: { id: cls.id, title: cls.title }, students, goals, open, days: Object.values(days) };
     const summary = `${students.length} kids, ${payload.days.length} kid-days from “${cls.title}”`;

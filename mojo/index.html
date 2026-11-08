@@ -89,7 +89,7 @@ function render() {
     classDays: data.classDays, start });
   const goal = pizzaGoal(offDays.length);
   const squad = Object.fromEntries(kids.map(k => [k.id,
-    mobileSquad(data.squadDays.filter(d => d.kid_id === k.id), today())]));
+    mobileSquad(data.squadDays.filter(d => d.kid_id === k.id), today(), RULES, k)]));
   const pizza = pizzaStatus(kids.map(k => weeks[k.id].weekXp), goal);
   const last = data.lastSync ? new Date(data.lastSync.ran_at) : null;
   const stale = !last || (Date.now() - last) / 36e5 > RULES.STALE_AFTER_HOURS;
@@ -279,7 +279,12 @@ async function openDrawer() {
             <div class="muted" style="font-size:12px;margin-top:4px">${esc(k.timeback_name || '')}</div></div>
           <div><div class="subjects">${subs.map(s => `<button class="sbtn ${(k.rings_off || []).includes(s) ? 'off' : ''}" data-ring="${esc(s)}">${esc(s)}</button>`).join('') || '<span class="muted">no goals yet</span>'}</div>
             <label class="check"><input type="checkbox" data-f="language_with_reading" ${k.language_with_reading ? 'checked' : ''}> Language with Reading</label>
-            <label class="check"><input type="checkbox" data-f="hidden" ${k.hidden ? 'checked' : ''}> Hide from board</label></div>
+            <label class="check"><input type="checkbox" data-f="hidden" ${k.hidden ? 'checked' : ''}> Hide from board</label>
+            <div class="muted" style="font-size:12px;font-weight:700;margin-top:6px">Count minutes instead of XP</div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px;font-weight:700">
+              from <input type="date" data-f="minutes_from" value="${esc(k.minutes_from || '')}" aria-label="Count minutes from">
+              to <input type="date" data-f="minutes_to" value="${esc(k.minutes_to || '')}" aria-label="Count minutes until">
+              <span class="muted" style="font-weight:600">(leave “to” empty until you know)</span></div></div>
         </div>`; }).join('') || '<p class="muted">Kids appear after the first sync.</p>'}
       <p class="muted" style="font-size:12px;margin-top:8px">Tap a subject to switch its ring off. Emails, focus lines and fun facts: <a href="/house/guide" style="color:var(--medium)">Alpha House kids list</a>.</p>
     </section>
@@ -317,6 +322,8 @@ async function openDrawer() {
     row.querySelector('[data-f=display_name]').onchange = e => save({ display_name: e.target.value.trim() || null });
     row.querySelector('[data-f=language_with_reading]').onchange = e => save({ language_with_reading: e.target.checked });
     row.querySelector('[data-f=hidden]').onchange = e => save({ hidden: e.target.checked });
+    row.querySelector('[data-f=minutes_from]').onchange = e => save({ minutes_from: e.target.value || null });
+    row.querySelector('[data-f=minutes_to]').onchange = e => save({ minutes_to: e.target.value || null });
     row.querySelectorAll('[data-ring]').forEach(b => b.onclick = () => {
       const k = data.kids.find(x => x.id === id), s = b.dataset.ring;
       const off = new Set(k.rings_off || []); off.has(s) ? off.delete(s) : off.add(s);

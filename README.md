@@ -29,6 +29,8 @@ tests/rules.test.mjs  rules tests with made-up data  (npm test)
 
 - **Mobile Squad** each kid's XP from 10/19 to 12/18 (both days included, weekends too, Handwriting left out) against 4,800 (`MOBILE_SQUAD` in `mojo/app.js`). Shown as a column on the board and a section on the kid page.
 
+- **Count minutes** (per kid, set in ⚙ with from/to dates): between those dates the kid's active minutes replace XP everywhere (Epic/Minimum, subject rings, Smoothie, Week total, Pizza, Mobile Squad). Cards show a MIN tag. Fun Friday is unchanged (it already uses accuracy and the minutes ring).
+
 ## Setup
 
 1. **Create a Supabase project.** SQL Editor → paste `supabase/schema.sql` → Run.

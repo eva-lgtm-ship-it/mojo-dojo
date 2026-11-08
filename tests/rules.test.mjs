@@ -1,6 +1,6 @@
 // Run with: node tests/rules.test.mjs   (made-up sample data only)
 import assert from 'node:assert/strict';
-import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, countedXp, excludedXp, mobileSquad, ringsFor, funFridayDay, allSubjectsAccuracy,
+import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, countedXp, excludedXp, mobileSquad, ringsFor, usesMinutes, dayCount, funFridayDay, allSubjectsAccuracy,
   lockedNow, todayLine } from '../mojo/app.js';
 
 const kid = { rings_off: [], language_with_reading: false, open_subjects: ['Math', 'Reading'],
@@ -181,6 +181,30 @@ assert.equal(fm(9.87).closed, true);
 assert.equal(fm(9.87).xp, 10);
 assert.equal(fm(9.4).closed, false);
 assert.equal(fm(9.4).left, 1);
+
+// Minutes mode: a kid set to count active minutes from 10/20 (no end date yet)
+const mk = { ...kid, minutes_from: '2026-10-20', minutes_to: null };
+const mrow = (day, mxp, rxp, mmin, rmin) => ({ day, goals: kid.goals, tests: 0, subjects: {
+  Math: { xp: mxp, questions: 10, correct: 9, minutes: mmin }, Reading: { xp: rxp, questions: 10, correct: 9, minutes: rmin } } });
+const mdays = [mrow('2026-10-19', 80, 70, 10, 10), mrow('2026-10-20', 20, 20, 80, 70)];
+w = buildKidWeek({ kid: mk, days: mdays, flags: [], classDays: [], start, todayStr: '2026-10-21' });
+assert.equal(w.cards[1].countMode, 'xp');            // Mon 10/19: before the start → XP
+assert.equal(w.cards[1].xp, 150);
+assert.equal(w.cards[2].countMode, 'minutes');       // Tue 10/20: minutes
+assert.equal(w.cards[2].xp, 150);                    // 80 + 70 minutes
+assert.equal(w.cards[2].rawXp, 40);
+assert.equal(w.cards[2].tier, 'epic');               // rings measured in minutes: 80 ≥ 60, 70 ≥ 60
+assert.equal(w.cards[2].rings.every(x => x.closed), true);
+assert.equal(w.weekXp, 300);                         // 150 XP Monday + 150 minutes Tuesday
+assert.equal(mobileSquad(mdays, '2026-10-21', RULES, mk).xp, 300);
+assert.equal(mobileSquad(mdays, '2026-10-21').xp, 190); // without the setting: XP only
+// end date respected
+const mk2 = { ...mk, minutes_to: '2026-10-19' };
+assert.equal(usesMinutes(mk2, '2026-10-20'), false);
+assert.equal(usesMinutes({ ...mk, minutes_from: '2026-10-19', minutes_to: '2026-10-19' }, '2026-10-19'), true);
+assert.equal(usesMinutes(kid, '2026-10-20'), false);
+assert.equal(dayCount(mdays[1], mk), 150);
+assert.match(todayLine(buildKidWeek({ kid: mk, days: [mrow('2026-10-20', 5, 5, 50, 40)], flags: [], classDays: [], start, todayStr: '2026-10-20' }).cards[2]), /30 minutes to a Minimum day/);
 
 assert.equal(RULES.EPIC_XP, 145);
 console.log('all rules tests passed');

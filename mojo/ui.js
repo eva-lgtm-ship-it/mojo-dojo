@@ -22,6 +22,7 @@ export function cardHtml(c, { kidId = '', compact = false } = {}) {
     c.pass && '<span class="tag">Pass</span>',
     c.test && '<span class="tag">Test</span>',
     c.excused && '<span class="tag">Excused</span>',
+    c.countMode === 'minutes' && '<span class="tag">Min</span>',
     c.callTime && `<span class="tag call">Call ${esc(c.callTime)}</span>`,
     ...c.appsOut.map(s => `<span class="tag">−${esc(SHORT[s] || s)}</span>`),
   ].filter(Boolean).join('');
@@ -38,7 +39,7 @@ export function cardHtml(c, { kidId = '', compact = false } = {}) {
 export function dayDetailHtml(c, title) {
   const rings = c.rings.length ? c.rings.map(r => `
     <div class="ringrow ${r.closed ? 'closed' : ''}">
-      <span>${esc(r.subject)}<br><span class="meta">${r.xp} of ${r.goal} XP${r.closed ? ' · closed' : ` · ${r.left} to go`}</span></span>
+      <span>${esc(r.subject)}<br><span class="meta">${r.xp} of ${r.goal} ${c.countMode === 'minutes' ? 'min' : 'XP'}${r.closed ? ' · closed' : ` · ${r.left} to go`}</span></span>
       <span></span><span>${r.closed ? '✓' : ''}</span>
     </div>`).join('') : '<p class="sub">No rings count this day.</p>';
   const notes = [
@@ -47,13 +48,14 @@ export function dayDetailHtml(c, title) {
     c.excused && 'Excused: left out of the smoothie and Fun Friday count.',
     c.appsOut.length && `App out: ${c.appsOut.join(', ')}.`,
     c.covers.length > 1 && 'Includes weekend work.',
+    c.countMode === 'minutes' && `Counting active minutes instead of XP for this kid. XP that day: ${c.rawXp}.`,
     ...Object.entries(c.notCounted || {}).map(([s, v]) => `${s} XP (${v}) isn't counted in the total.`),
   ].filter(Boolean);
   return `
     <h3>${esc(title)}</h3>
     <p class="sub">${esc(shortDay(c.date))} · ${c.tier === 'notyet' ? 'Not yet' : tierLabel(c.tier) + ' day'} · All Subjects accuracy ${pct(c.allSubjectsAcc)}${c.funDay ? ' ✓ Fun Friday' : ''}</p>
     <div class="stats">
-      <div class="stat"><b>${c.xp}</b><span>XP</span></div>
+      <div class="stat"><b>${c.xp}</b><span>${c.countMode === 'minutes' ? 'Counted (min)' : 'XP'}</span></div>
       <div class="stat"><b>${c.minutes}<small style="font-size:13px;font-weight:700"> / ${c.minutesGoal}</small></b><span>Minutes${c.minutesRing ? ' ✓' : ''}</span></div>
       <div class="stat"><b>${pct(c.accuracy)}</b><span>Accuracy${c.accIcon ? ' ✓' : ''}</span></div>
     </div>

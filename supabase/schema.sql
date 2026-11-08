@@ -47,6 +47,10 @@ create table if not exists public.kids (
   updated_at            timestamptz not null default now()
 );
 
+-- Minutes mode: count active minutes instead of XP between these dates (set by a guide).
+alter table public.kids add column if not exists minutes_from date;
+alter table public.kids add column if not exists minutes_to   date;
+
 -- Raw Timeback numbers, one row per kid per calendar date (weekends included;
 -- app.js folds Saturday and Sunday into Friday).
 create table if not exists public.days (
@@ -271,7 +275,9 @@ begin
       'rings_off', to_jsonb(me.rings_off),
       'language_with_reading', me.language_with_reading,
       'open_subjects', to_jsonb(me.open_subjects),
-      'goals', me.goals
+      'goals', me.goals,
+      'minutes_from', me.minutes_from,
+      'minutes_to', me.minutes_to
     ),
     'days', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -318,6 +324,17 @@ begin
         where k.active and not k.hidden
         group by k.id
       ) t), '[]'),
+    -- anonymous: per visible classmate, this range's day rows plus their minutes-mode dates
+    -- (no ids, no names), so the kid page counts Pizza with the same app.js rules as the board
+    'class_week_days', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'minutes_from', k.minutes_from, 'minutes_to', k.minutes_to,
+        'days', coalesce((
+          select jsonb_agg(jsonb_build_object('day', d.day, 'subjects', d.subjects) order by d.day)
+          from public.days d
+          where d.kid_id = k.id and d.day between p_from and p_to), '[]'::jsonb)))
+      from public.kids k
+      where k.active and not k.hidden), '[]'),
     -- dates when EVERY kid on the board was excused (dates only, no names); lowers the Pizza goal
     'all_excused_days', coalesce((
       select jsonb_agg(e.day order by e.day)

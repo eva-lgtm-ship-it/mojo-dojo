@@ -46,16 +46,67 @@
   });
 
   /* ---- Timeback server functions --------------------------------- */
+  /* Since Nov 2026 Timeback's server functions speak a "seroval" wire format: requests and
+     answers are JSON trees of typed nodes ({t:10} object, {t:9} array, {t:1} string, {t:0}
+     number, {t:2} constant, {t:4} reference). enc/dec below translate plain values both ways. */
   const SFN = '/_serverFn/';
+  const enc = (v) => {
+    let id = 0;
+    const e = (x) => {
+      if (x === null) return { t: 2, s: 0 };
+      if (x === undefined) return { t: 2, s: 1 };
+      if (x === true) return { t: 2, s: 2 };
+      if (x === false) return { t: 2, s: 3 };
+      if (typeof x === 'number') return { t: 0, s: x };
+      if (typeof x === 'string') return { t: 1, s: x };
+      if (Array.isArray(x)) return { t: 9, i: id++, a: x.map(e), o: 0 };
+      const keys = Object.keys(x);
+      const node = { t: 10, i: id++, p: null, o: 0 };
+      node.p = { k: keys, v: keys.map(k => e(x[k])) };
+      return node;
+    };
+    return JSON.stringify({ t: e(v), f: 127, m: [] });
+  };
+  const unesc = (s) => typeof s !== 'string' ? s : s.replace(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)/g, (m, g) =>
+    g[0] === 'x' && g.length === 3 ? String.fromCharCode(parseInt(g.slice(1), 16))
+      : g[0] === 'u' && g.length === 5 ? String.fromCharCode(parseInt(g.slice(1), 16))
+        : ({ n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', 0: '\0' }[g] ?? g));
+  const dec = (root) => {
+    const refs = {};
+    const CONST = [null, undefined, true, false, -0, Infinity, -Infinity, NaN];
+    const d = (n) => {
+      if (n === null || n === undefined) return undefined;
+      switch (n.t) {
+        case 0: return n.s;
+        case 1: return unesc(n.s);
+        case 2: return CONST[n.s];
+        case 3: return Number(n.s);
+        case 4: return refs[n.i];
+        case 5: return n.s;
+        case 7: { const a = []; refs[n.i] = a; (n.a || []).forEach(x => a.push(d(x))); return a; }
+        case 8: { const o = {}; refs[n.i] = o; const ks = n.e ? n.e.k : [], vs = n.e ? n.e.v : [];
+          ks.forEach((k, j) => { o[String(d(k))] = d(vs[j]); }); return o; }
+        case 9: { const a = []; refs[n.i] = a; (n.a || []).forEach((x, k) => { a[k] = d(x); }); return a; }
+        case 10: case 11: { const o = {}; refs[n.i] = o; const p = n.p || { k: [], v: [] };
+          p.k.forEach((k, j) => { o[unesc(k)] = d(p.v[j]); }); return o; }
+        default: return (n.s && typeof n.s === 'object' && n.s.v) ? d(n.s.v) : undefined;
+      }
+    };
+    return d(root);
+  };
   const call = async (h, data) => {
-    const r = await fetch(SFN + h + '?createServerFn', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data, context: {} }) });
-    const j = await r.json(); if (j.$error) throw new Error(j.$error.message || 'Timeback error'); return j.result;
+    const r = await fetch(SFN + h, { method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-tsr-serverfn': 'true', accept: 'application/json' },
+      body: enc({ data, context: {} }) });
+    const txt = await r.text();
+    let j; try { j = JSON.parse(txt); } catch (e) { throw new Error('Timeback answered ' + r.status); }
+    if (j && j.isSerializedRedirect) throw new Error('Timeback redirected the request; reload Timeback and sign in');
+    const v = (j && typeof j.t === 'number') ? dec(j) : j;
+    if (v && v.error) throw new Error((v.error && v.error.message) || 'Timeback error');
+    if (j && j.$error) throw new Error(j.$error.message || 'Timeback error');
+    return v && typeof v === 'object' && 'result' in v ? v.result : v;
   };
-  const callGet = async (h, data) => {
-    const r = await fetch(`${SFN}${h}?payload=` + encodeURIComponent(JSON.stringify({ data, context: {} })) + '&createServerFn');
-    const j = await r.json(); if (j.$error) throw new Error(j.$error.message || 'Timeback error'); return j.result;
-  };
+  const callGet = call;   /* Timeback now refuses GET for these; POST works */
   const FN = {
     scope:   'src_features_xp-stats_actions_getXpStatsCampusScope_ts--getXpStatsCampusScope_createServerFn_handler',
     metrics: 'src_features_learning-metrics_actions_getBatchActivityMetrics_ts--getBatchActivityMetrics_createServerFn_handler',

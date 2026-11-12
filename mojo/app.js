@@ -286,11 +286,24 @@ export function evalWeek(cards, todayStr, r = RULES) {
 }
 
 /**
- * Minutes mode: a guide can set a kid to count active minutes instead of XP between two
- * dates (kids.minutes_from / kids.minutes_to; no end date = until further notice).
+ * Minutes mode: a guide can set periods for a kid, each {from, to, subjects}: between
+ * from and to (no "to" = until further notice) the listed subjects count active minutes
+ * instead of XP (no subjects listed = every subject). Stored in kids.minutes_periods;
+ * the older single window (minutes_from / minutes_to / minutes_subjects) still works.
  */
+export function kidPeriods(kid) {
+  if (!kid) return [];
+  if (Array.isArray(kid.minutes_periods) && kid.minutes_periods.length) return kid.minutes_periods;
+  if (kid.minutes_from) return [{ from: kid.minutes_from, to: kid.minutes_to || null, subjects: kid.minutes_subjects || [] }];
+  return [];
+}
+
+function periodOn(kid, day) {
+  return kidPeriods(kid).find(p => p && p.from && day >= p.from && (!p.to || day <= p.to)) || null;
+}
+
 export function usesMinutes(kid, day) {
-  return !!(kid && kid.minutes_from && day >= kid.minutes_from && (!kid.minutes_to || day <= kid.minutes_to));
+  return !!periodOn(kid, day);
 }
 
 /** Active minutes, all subjects together (the All Subjects minutes ring). */
@@ -306,8 +319,9 @@ export function minutesTotal(subjects) {
  * (kids.minutes_subjects; empty list means all subjects).
  */
 export function minutesSubjects(kid, day) {
-  if (!usesMinutes(kid, day)) return null;
-  const list = (kid.minutes_subjects || []).filter(Boolean);
+  const p = periodOn(kid, day);
+  if (!p) return null;
+  const list = (p.subjects || []).filter(Boolean);
   return list.length ? new Set(list) : 'all';
 }
 

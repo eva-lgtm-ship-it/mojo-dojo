@@ -1,6 +1,6 @@
 // Run with: node tests/rules.test.mjs   (made-up sample data only)
 import assert from 'node:assert/strict';
-import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, countedXp, excludedXp, mobileSquad, ringsFor, usesMinutes, dayCount, funFridayDay, allSubjectsAccuracy,
+import { RULES, weekStartOf, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, countedXp, excludedXp, mobileSquad, ringsFor, usesMinutes, dayCount, kidPeriods, funFridayDay, allSubjectsAccuracy,
   lockedNow, todayLine } from '../mojo/app.js';
 
 const kid = { rings_off: [], language_with_reading: false, open_subjects: ['Math', 'Reading'],
@@ -223,6 +223,23 @@ assert.equal(dayCount({ day: '2026-10-20', subjects: { Math: { xp: 50 }, Handwri
 assert.equal(dayCount(xrow, { ...xk, minutes_subjects: [] }), 80);
 // before the start date: plain XP
 assert.equal(dayCount({ ...xrow, day: '2026-10-19' }, xk), 80);
+
+// Periods: all subjects in minutes 10/19–10/20, then Reading-only from 10/21
+const pk = { ...kid, minutes_periods: [
+  { from: '2026-10-19', to: '2026-10-20', subjects: [] },
+  { from: '2026-10-21', to: null, subjects: ['Reading'] }] };
+const prow = (day) => mrow(day, 70, 10, 15, 65);
+assert.equal(dayCount(prow('2026-10-16'), pk), 80);       // before: XP
+assert.equal(dayCount(prow('2026-10-20'), pk), 80);       // period 1: 15 + 65 minutes
+assert.equal(dayCount(prow('2026-10-21'), pk), 135);      // period 2: 70 XP + 65 Reading minutes
+assert.equal(dayCount(prow('2026-10-22'), pk), 135);
+w = buildKidWeek({ kid: pk, days: [prow('2026-10-20'), prow('2026-10-21')], flags: [], classDays: [], start, todayStr: '2026-10-22' });
+assert.equal(w.cards[2].countMode, 'minutes');
+assert.equal(w.cards[3].countMode, 'mixed');
+// periods override the old single window; old window still works alone
+assert.equal(kidPeriods({ minutes_from: '2026-10-19', minutes_to: null, minutes_subjects: ['Reading'] }).length, 1);
+assert.equal(kidPeriods({ ...pk, minutes_from: '2026-01-01' }).length, 2);
+assert.equal(kidPeriods(kid).length, 0);
 
 assert.equal(RULES.EPIC_XP, 145);
 console.log('all rules tests passed');

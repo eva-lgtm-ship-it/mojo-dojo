@@ -14,7 +14,7 @@
 <aside class="drawer" id="drawer" aria-label="Guide settings"></aside>
 
 <script type="module">
-import { RULES, today, weekStartOf, addDays, shortDay, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, mobileSquad,
+import { RULES, today, weekStartOf, addDays, shortDay, weekCards, buildKidWeek, pizzaStatus, pizzaGoal, allExcusedDays, pizzaOffDays, mobileSquad, kidPeriods,
   rulesInWords, esc, kidName, supa, session, isGuide, loadWeek, signInCard, forgetConfig, SUBJECT_ORDER }
   from '/mojo/app.js';
 import { cardHtml, dayDetailHtml, smoothieHtml, funFridayHtml, weekXpHtml, mobileSquadHtml, toast } from '/mojo/ui.js';
@@ -281,14 +281,19 @@ async function openDrawer() {
             <label class="check"><input type="checkbox" data-f="language_with_reading" ${k.language_with_reading ? 'checked' : ''}> Language with Reading</label>
             <label class="check"><input type="checkbox" data-f="hidden" ${k.hidden ? 'checked' : ''}> Hide from board</label>
             <div class="muted" style="font-size:12px;font-weight:700;margin-top:6px">Count minutes instead of XP</div>
-            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px;font-weight:700">
-              from <input type="date" data-f="minutes_from" value="${esc(k.minutes_from || '')}" aria-label="Count minutes from">
-              to <input type="date" data-f="minutes_to" value="${esc(k.minutes_to || '')}" aria-label="Count minutes until">
-              <span class="muted" style="font-weight:600">(leave “to” empty until you know)</span></div>
-            <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;font-size:12px;font-weight:700;margin-top:4px">
-              minutes for: ${[...new Set([...subs, ...(k.open_subjects || []), ...(k.minutes_subjects || [])])].map(s =>
-                `<button class="sbtn ${(k.minutes_subjects || []).includes(s) ? '' : 'off'}" data-minsub="${esc(s)}">${esc(s)}</button>`).join('')}
-              <span class="muted" style="font-weight:600">(none picked = all subjects)</span></div></div>
+            ${kidPeriods(k).map((p, i) => `
+            <div class="period" data-p="${i}" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-top:4px;font-size:12px;font-weight:700">
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                from <input type="date" data-pf="from" value="${esc(p.from || '')}" aria-label="Period ${i + 1} from">
+                to <input type="date" data-pf="to" value="${esc(p.to || '')}" aria-label="Period ${i + 1} until">
+                <button class="btn small" data-pdel title="Remove this period" style="background:var(--pale);color:var(--navy)">✕ Remove</button></div>
+              <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:4px">minutes for:
+                ${[...new Set([...subs, ...(k.open_subjects || []), ...(p.subjects || [])])].map(sub =>
+                  `<button class="sbtn ${(p.subjects || []).includes(sub) ? '' : 'off'}" data-psub="${esc(sub)}">${esc(sub)}</button>`).join('')}
+                <span class="muted" style="font-weight:600">(none picked = all)</span></div>
+            </div>`).join('')}
+            <button class="btn small" data-padd style="margin-top:6px;background:var(--medium);color:#fff">+ Add period</button>
+            <span class="muted" style="font-size:11px;font-weight:600">(leave “to” empty until you know)</span></div>
         </div>`; }).join('') || '<p class="muted">Kids appear after the first sync.</p>'}
       <p class="muted" style="font-size:12px;margin-top:8px">Tap a subject to switch its ring off. Emails, focus lines and fun facts: <a href="/house/guide" style="color:var(--medium)">Alpha House kids list</a>.</p>
     </section>
@@ -326,14 +331,32 @@ async function openDrawer() {
     row.querySelector('[data-f=display_name]').onchange = e => save({ display_name: e.target.value.trim() || null });
     row.querySelector('[data-f=language_with_reading]').onchange = e => save({ language_with_reading: e.target.checked });
     row.querySelector('[data-f=hidden]').onchange = e => save({ hidden: e.target.checked });
-    row.querySelector('[data-f=minutes_from]').onchange = e => save({ minutes_from: e.target.value || null });
-    row.querySelector('[data-f=minutes_to]').onchange = e => save({ minutes_to: e.target.value || null });
-    row.querySelectorAll('[data-minsub]').forEach(b => b.onclick = () => {
-      const k = data.kids.find(x => x.id === id), sub = b.dataset.minsub;
-      const set = new Set(k.minutes_subjects || []); set.has(sub) ? set.delete(sub) : set.add(sub);
-      b.classList.toggle('off');
-      save({ minutes_subjects: [...set] });
+    // Count-minutes periods: saved as kids.minutes_periods; the old single-window fields are cleared
+    const periodsOf = () => kidPeriods(data.kids.find(x => x.id === id)).map(p => ({ ...p, subjects: [...(p.subjects || [])] }));
+    const savePeriods = async (periods, redraw) => {
+      await save({ minutes_periods: periods, minutes_from: null, minutes_to: null, minutes_subjects: [] });
+      if (redraw) openDrawer();
+    };
+    row.querySelectorAll('.period').forEach(el => {
+      const i = Number(el.dataset.p);
+      el.querySelectorAll('[data-pf]').forEach(inp => inp.onchange = () => {
+        const ps = periodsOf(); ps[i][inp.dataset.pf] = inp.value || null; savePeriods(ps, false);
+      });
+      el.querySelector('[data-pdel]').onclick = () => {
+        const ps = periodsOf(); ps.splice(i, 1); savePeriods(ps, true);
+      };
+      el.querySelectorAll('[data-psub]').forEach(b => b.onclick = () => {
+        const ps = periodsOf(), sub = b.dataset.psub, set = new Set(ps[i].subjects);
+        set.has(sub) ? set.delete(sub) : set.add(sub);
+        ps[i].subjects = [...set]; b.classList.toggle('off'); savePeriods(ps, false);
+      });
     });
+    row.querySelector('[data-padd]').onclick = () => {
+      const ps = periodsOf();
+      const last = ps[ps.length - 1];
+      ps.push({ from: last && last.to ? addDays(last.to, 1) : today(), to: null, subjects: [] });
+      savePeriods(ps, true);
+    };
     row.querySelectorAll('[data-ring]').forEach(b => b.onclick = () => {
       const k = data.kids.find(x => x.id === id), s = b.dataset.ring;
       const off = new Set(k.rings_off || []); off.has(s) ? off.delete(s) : off.add(s);

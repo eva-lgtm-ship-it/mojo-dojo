@@ -206,5 +206,23 @@ assert.equal(usesMinutes(kid, '2026-10-20'), false);
 assert.equal(dayCount(mdays[1], mk), 150);
 assert.match(todayLine(buildKidWeek({ kid: mk, days: [mrow('2026-10-20', 5, 5, 50, 40)], flags: [], classDays: [], start, todayStr: '2026-10-20' }).cards[2]), /30 minutes to a Minimum day/);
 
+// Mixed minutes mode: Reading counts minutes, Math (and everything else) counts XP
+const xk = { ...kid, minutes_from: '2026-10-20', minutes_to: null, minutes_subjects: ['Reading'] };
+const xrow = mrow('2026-10-20', 70, 10, 15, 65);          // Math 70 XP / 15 min; Reading 10 XP / 65 min
+assert.equal(dayCount(xrow, xk), 135);                    // 70 XP + 65 min
+w = buildKidWeek({ kid: xk, days: [xrow], flags: [], classDays: [], start, todayStr: '2026-10-21' });
+const xc = w.cards[2];
+assert.equal(xc.countMode, 'mixed');
+assert.equal(xc.xp, 135);
+assert.deepEqual(xc.minutesFor, ['Reading']);
+assert.deepEqual(xc.rings.map(x => [x.subject, x.unit, x.xp, x.closed]), [['Math', 'XP', 70, true], ['Reading', 'min', 65, true]]);
+assert.equal(xc.tier, 'minimum');
+// Handwriting XP stays out on XP subjects in mixed mode
+assert.equal(dayCount({ day: '2026-10-20', subjects: { Math: { xp: 50 }, Handwriting: { xp: 40 }, Reading: { minutes: 30, xp: 5 } } }, xk), 80);
+// empty subject list = all subjects in minutes (unchanged behaviour)
+assert.equal(dayCount(xrow, { ...xk, minutes_subjects: [] }), 80);
+// before the start date: plain XP
+assert.equal(dayCount({ ...xrow, day: '2026-10-19' }, xk), 80);
+
 assert.equal(RULES.EPIC_XP, 145);
 console.log('all rules tests passed');

@@ -284,7 +284,11 @@ async function openDrawer() {
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px;font-weight:700">
               from <input type="date" data-f="minutes_from" value="${esc(k.minutes_from || '')}" aria-label="Count minutes from">
               to <input type="date" data-f="minutes_to" value="${esc(k.minutes_to || '')}" aria-label="Count minutes until">
-              <span class="muted" style="font-weight:600">(leave “to” empty until you know)</span></div></div>
+              <span class="muted" style="font-weight:600">(leave “to” empty until you know)</span></div>
+            <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;font-size:12px;font-weight:700;margin-top:4px">
+              minutes for: ${[...new Set([...subs, ...(k.open_subjects || []), ...(k.minutes_subjects || [])])].map(s =>
+                `<button class="sbtn ${(k.minutes_subjects || []).includes(s) ? '' : 'off'}" data-minsub="${esc(s)}">${esc(s)}</button>`).join('')}
+              <span class="muted" style="font-weight:600">(none picked = all subjects)</span></div></div>
         </div>`; }).join('') || '<p class="muted">Kids appear after the first sync.</p>'}
       <p class="muted" style="font-size:12px;margin-top:8px">Tap a subject to switch its ring off. Emails, focus lines and fun facts: <a href="/house/guide" style="color:var(--medium)">Alpha House kids list</a>.</p>
     </section>
@@ -324,6 +328,12 @@ async function openDrawer() {
     row.querySelector('[data-f=hidden]').onchange = e => save({ hidden: e.target.checked });
     row.querySelector('[data-f=minutes_from]').onchange = e => save({ minutes_from: e.target.value || null });
     row.querySelector('[data-f=minutes_to]').onchange = e => save({ minutes_to: e.target.value || null });
+    row.querySelectorAll('[data-minsub]').forEach(b => b.onclick = () => {
+      const k = data.kids.find(x => x.id === id), sub = b.dataset.minsub;
+      const set = new Set(k.minutes_subjects || []); set.has(sub) ? set.delete(sub) : set.add(sub);
+      b.classList.toggle('off');
+      save({ minutes_subjects: [...set] });
+    });
     row.querySelectorAll('[data-ring]').forEach(b => b.onclick = () => {
       const k = data.kids.find(x => x.id === id), s = b.dataset.ring;
       const off = new Set(k.rings_off || []); off.has(s) ? off.delete(s) : off.add(s);

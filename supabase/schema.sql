@@ -50,6 +50,8 @@ create table if not exists public.kids (
 -- Minutes mode: count active minutes instead of XP between these dates (set by a guide).
 alter table public.kids add column if not exists minutes_from date;
 alter table public.kids add column if not exists minutes_to   date;
+-- Which subjects count in minutes during that window (empty = all subjects).
+alter table public.kids add column if not exists minutes_subjects text[] not null default '{}';
 
 -- Raw Timeback numbers, one row per kid per calendar date (weekends included;
 -- app.js folds Saturday and Sunday into Friday).
@@ -277,7 +279,8 @@ begin
       'open_subjects', to_jsonb(me.open_subjects),
       'goals', me.goals,
       'minutes_from', me.minutes_from,
-      'minutes_to', me.minutes_to
+      'minutes_to', me.minutes_to,
+      'minutes_subjects', to_jsonb(me.minutes_subjects)
     ),
     'days', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -329,6 +332,7 @@ begin
     'class_week_days', coalesce((
       select jsonb_agg(jsonb_build_object(
         'minutes_from', k.minutes_from, 'minutes_to', k.minutes_to,
+        'minutes_subjects', to_jsonb(k.minutes_subjects),
         'days', coalesce((
           select jsonb_agg(jsonb_build_object('day', d.day, 'subjects', d.subjects) order by d.day)
           from public.days d

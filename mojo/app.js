@@ -81,7 +81,7 @@ export function rulesInWords(r = RULES) {
     `Pizza: everyone on the board reaches ${r.PIZZA_WEEK_XP} XP in the week, ${r.PIZZA_EXCUSED_DAY_XP} less for each No school day or day the whole class is excused (one day →${r.PIZZA_WEEK_XP - r.PIZZA_EXCUSED_DAY_XP}).`,
     ...((r.XP_EXCLUDED_SUBJECTS || []).length
       ? [`${r.XP_EXCLUDED_SUBJECTS.join(' and ')} XP isn't counted in the daily total, the week total, Pizza or Mobile Squad.`] : []),
-    `Count minutes (set per kid in ⚙): between the dates you set, that kid's active minutes replace XP everywhere: Epic/Minimum and rings, Smoothie, Week total, Pizza and Mobile Squad. Cards show MIN.`,
+    `Count minutes (set per kid in ⚙): between the dates you set, that kid's active minutes replace XP for the subjects you pick (all subjects if none picked), everywhere: Epic/Minimum and rings, Smoothie, Week total, Pizza and Mobile Squad. Cards show MIN.`,
     `Mobile Squad: ${r.MOBILE_SQUAD.goalXp.toLocaleString()} XP from ${shortDay(r.MOBILE_SQUAD.start)} to ${shortDay(r.MOBILE_SQUAD.end)}, each kid on their own.`,
     `Minutes ring: active minutes, all subjects, reach the day's goal (the sum of the subject goals, ${r.TIME_ICON_MINUTES} for most kids). Accuracy icon: ${pct(r.ACCURACY_ICON)}+ across every question.`,
   ];
@@ -140,6 +140,7 @@ function sumSubjects(rows) {
 
 /** Which rings count for this kid on this day, with their goals. */
 export function ringsFor({ goals, subjects, kid, appsOut, useMinutes = false }) {
+  // useMinutes: true (every subject), false, or a Set of subjects measured in minutes
   const off = new Set([...(kid.rings_off || []), ...(appsOut || [])]);
   const open = new Set(kid.open_subjects || []);
   const g = { ...(goals || {}) };
@@ -162,8 +163,9 @@ export function ringsFor({ goals, subjects, kid, appsOut, useMinutes = false }) 
       // Timeback shows XP rounded (9.87 → 10) and closes the ring on that number, so we do too.
       // In minutes mode the subject's minutes are measured against the same goal (Timeback's
       // minutes goal for a subject equals its XP goal).
-      const xp = Math.round(num(s[name] && (useMinutes ? s[name].minutes : s[name].xp)));
-      return { subject: name, goal: num(goal), xp, closed: xp >= num(goal),
+      const inMin = useMinutes === true || (useMinutes instanceof Set && useMinutes.has(name));
+      const xp = Math.round(num(s[name] && (inMin ? s[name].minutes : s[name].xp)));
+      return { subject: name, goal: num(goal), xp, unit: inMin ? 'min' : 'XP', closed: xp >= num(goal),
         left: Math.max(0, Math.ceil(num(goal) - xp)) };
     })
     .sort((a, b) => order(a.subject) - order(b.subject));
@@ -206,8 +208,9 @@ export function evalCard({ card, rows, kid, flag, classDay, todayStr }, r = RULE
   const first = rows.find(x => x && x.day === card.date) || rows[0];
   const goals = (first && first.goals && Object.keys(first.goals).length) ? first.goals : (kid.goals || {});
   const appsOut = [...(f.apps_out || []), ...(c.apps_out || [])];
-  const countMode = usesMinutes(kid, card.date) ? 'minutes' : 'xp';
-  const rings = ringsFor({ goals, subjects, kid, appsOut, useMinutes: countMode === 'minutes' });
+  const minSet = minutesSubjects(kid, card.date);          // null (XP), 'all', or a Set
+  const countMode = !minSet ? 'xp' : minSet === 'all' ? 'minutes' : 'mixed';
+  const rings = ringsFor({ goals, subjects, kid, appsOut, useMinutes: minSet === 'all' ? true : (minSet || false) });
   const outSet = new Set(appsOut);
   const goalSum = Object.entries(goals).filter(([name]) => !outSet.has(name))
     .reduce((t, [, g]) => t + num(g), 0);
@@ -217,7 +220,7 @@ export function evalCard({ card, rows, kid, flag, classDay, todayStr }, r = RULE
   // the day's number: XP, or active minutes for a kid in minutes mode (decided per date)
   const xp = rows.reduce((t, row) => t + dayCount(row, kid, r), 0);
   const rawXp = countedXp(subjects, r);
-  const notCounted = countMode === 'xp' ? excludedXp(subjects, r) : {};
+  const notCounted = countMode === 'minutes' ? {} : excludedXp(subjects, r);
   const minutes = Math.round(all.reduce((a, m) => a + m.minutes, 0));
   const questions = all.reduce((a, m) => a + m.questions, 0);
   const correct = all.reduce((a, m) => a + m.correct, 0);
@@ -242,7 +245,7 @@ export function evalCard({ card, rows, kid, flag, classDay, todayStr }, r = RULE
     minutesRing: minutes >= minutesGoal,
     timeIcon: minutes >= minutesGoal,
     accIcon: accuracy !== null && accuracy >= r.ACCURACY_ICON,
-    notCounted, countMode, rawXp,
+    notCounted, countMode, rawXp, minutesFor: minSet instanceof Set ? [...minSet] : [],
     allSubjectsAcc: allSubjectsAccuracy(subjects),
     funDay: funFridayDay(subjects, r) && (!r.FUN_FRIDAY.needMinutesRing || minutes >= minutesGoal),
     pass: !!f.pass, test, autoTest: tests > 0 && !f.test, excused: !!f.excused,
@@ -297,9 +300,32 @@ export function minutesTotal(subjects) {
   return Math.round(t);
 }
 
-/** One day's number for one kid: counted XP, or minutes in minutes mode. */
+/**
+ * Which subjects count in minutes for this kid on this day:
+ * null = none (plain XP); 'all' = every subject; a Set = only those subjects
+ * (kids.minutes_subjects; empty list means all subjects).
+ */
+export function minutesSubjects(kid, day) {
+  if (!usesMinutes(kid, day)) return null;
+  const list = (kid.minutes_subjects || []).filter(Boolean);
+  return list.length ? new Set(list) : 'all';
+}
+
+/**
+ * One day's number for one kid. Plain kids: counted XP. Minutes mode: minutes for the
+ * chosen subjects (or all), XP for the rest (XP_EXCLUDED_SUBJECTS still left out of XP).
+ */
 export function dayCount(row, kid, r = RULES) {
-  return usesMinutes(kid, row.day) ? minutesTotal(row.subjects) : countedXp(row.subjects, r);
+  const set = minutesSubjects(kid, row.day);
+  if (!set) return countedXp(row.subjects, r);
+  if (set === 'all') return minutesTotal(row.subjects);
+  const skip = new Set(r.XP_EXCLUDED_SUBJECTS || []);
+  let t = 0;
+  for (const [name, m] of Object.entries(row.subjects || {})) {
+    if (set.has(name)) t += num(m && m.minutes);
+    else if (!skip.has(name)) t += num(m && m.xp);
+  }
+  return Math.round(t);
 }
 
 /** XP that counts toward totals: every subject except XP_EXCLUDED_SUBJECTS. */
@@ -402,7 +428,7 @@ export function todayLine(card, r = RULES) {
   if (!card) return 'No school day today.';
   if (card.noSchool) return 'No school today. Enjoy!';
   const bits = [];
-  const u = card.countMode === 'minutes' ? 'minutes' : 'XP';
+  const u = card.countMode === 'minutes' ? 'minutes' : card.countMode === 'mixed' ? 'points' : 'XP';
   if (card.xp < r.MIN_XP) bits.push(`${card.toMin} ${u} to a Minimum day`);
   else if (card.xp < r.EPIC_XP) bits.push(`${card.toEpic} ${u} to an Epic day`);
   else bits.push(`${card.xp} ${u} — that's Epic!`);

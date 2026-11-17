@@ -241,5 +241,14 @@ assert.equal(kidPeriods({ minutes_from: '2026-10-19', minutes_to: null, minutes_
 assert.equal(kidPeriods({ ...pk, minutes_from: '2026-01-01' }).length, 2);
 assert.equal(kidPeriods(kid).length, 0);
 
+// Accuracy shown = All Subjects average, not pooled: one big low subject doesn't swamp the day
+const acc = { ...kid, open_subjects: ['Math', 'Vocabulary'], goals: { Math: 60, Vocabulary: 60 } };
+w = buildKidWeek({ kid: acc, days: [{ day: '2026-10-19', goals: acc.goals, tests: 0, subjects: {
+  Math: { xp: 70, questions: 40, correct: 36, minutes: 60 },            // 90%
+  Vocabulary: { xp: 70, questions: 1300, correct: 1001, minutes: 60 } } }],  // 77% (pooled would be 77.3%)
+  flags: [], classDays: [], start, todayStr: '2026-10-20' });
+assert.equal(Math.round(w.cards[1].accuracy * 1000), 835);   // (90 + 77) / 2 = 83.5%
+assert.equal(w.cards[1].accIcon, true);
+
 assert.equal(RULES.EPIC_XP, 145);
 console.log('all rules tests passed');

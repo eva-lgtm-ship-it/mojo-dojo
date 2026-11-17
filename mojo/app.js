@@ -22,7 +22,7 @@ export const RULES = {
   // equal to its daily XP goal, so the target is the sum of that day's subject
   // goals (apps marked out are taken off). This is the fallback if no goals synced.
   TIME_ICON_MINUTES: 120,
-  ACCURACY_ICON: 0.80,        // Accuracy icon: 80%+ across every question that day
+  ACCURACY_ICON: 0.80,        // Accuracy icon: All Subjects accuracy (average of the subjects) 80%+
 
   // Smoothie: every counted school day of the week is Epic.
   // Excused days and no-school days are not counted.
@@ -83,7 +83,7 @@ export function rulesInWords(r = RULES) {
       ? [`${r.XP_EXCLUDED_SUBJECTS.join(' and ')} XP isn't counted in the daily total, the week total, Pizza or Mobile Squad.`] : []),
     `Count minutes (set per kid in ⚙): between the dates you set, that kid's active minutes replace XP for the subjects you pick (all subjects if none picked), everywhere: Epic/Minimum and rings, Smoothie, Week total, Pizza and Mobile Squad. Cards show MIN.`,
     `Mobile Squad: ${r.MOBILE_SQUAD.goalXp.toLocaleString()} XP from ${shortDay(r.MOBILE_SQUAD.start)} to ${shortDay(r.MOBILE_SQUAD.end)}, each kid on their own.`,
-    `Minutes ring: active minutes, all subjects, reach the day's goal (the sum of the subject goals, ${r.TIME_ICON_MINUTES} for most kids). Accuracy icon: ${pct(r.ACCURACY_ICON)}+ across every question.`,
+    `Minutes ring: active minutes, all subjects, reach the day's goal (the sum of the subject goals, ${r.TIME_ICON_MINUTES} for most kids). Accuracy: the All Subjects ring, the average of each subject's accuracy (like Timeback); icon at ${pct(r.ACCURACY_ICON)}+.`,
   ];
 }
 
@@ -224,7 +224,9 @@ export function evalCard({ card, rows, kid, flag, classDay, todayStr }, r = RULE
   const minutes = Math.round(all.reduce((a, m) => a + m.minutes, 0));
   const questions = all.reduce((a, m) => a + m.questions, 0);
   const correct = all.reduce((a, m) => a + m.correct, 0);
-  const accuracy = questions ? correct / questions : null;
+  // Accuracy shown on the board = Timeback's All Subjects ring: the average of each worked
+  // subject's accuracy, not every question pooled (one big subject would swamp the rest)
+  const accuracy = allSubjectsAccuracy(subjects);
   const tests = rows.reduce((a, x) => a + num(x && x.tests), 0);
 
   const test = !!f.test || tests > 0;           // a Timeback test does this on its own

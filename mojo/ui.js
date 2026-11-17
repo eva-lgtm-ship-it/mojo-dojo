@@ -55,11 +55,11 @@ export function dayDetailHtml(c, title) {
   ].filter(Boolean);
   return `
     <h3>${esc(title)}</h3>
-    <p class="sub">${esc(shortDay(c.date))} · ${c.tier === 'notyet' ? 'Not yet' : tierLabel(c.tier) + ' day'} · All Subjects accuracy ${pct(c.allSubjectsAcc)}${c.funDay ? ' ✓ Fun Friday' : ''}</p>
+    <p class="sub">${esc(shortDay(c.date))} · ${c.tier === 'notyet' ? 'Not yet' : tierLabel(c.tier) + ' day'}${c.funDay ? ' · ✓ Fun Friday day' : ''}</p>
     <div class="stats">
       <div class="stat"><b>${c.xp}</b><span>${c.countMode === 'minutes' ? 'Counted (min)' : c.countMode === 'mixed' ? 'Counted (XP + min)' : 'XP'}</span></div>
       <div class="stat"><b>${c.minutes}<small style="font-size:13px;font-weight:700"> / ${c.minutesGoal}</small></b><span>Minutes${c.minutesRing ? ' ✓' : ''}</span></div>
-      <div class="stat"><b>${pct(c.accuracy)}</b><span>Accuracy${c.accIcon ? ' ✓' : ''}</span></div>
+      <div class="stat"><b>${pct(c.accuracy)}</b><span>All Subjects acc.${c.accIcon ? ' ✓' : ''}</span></div>
     </div>
     <div class="ringlist">${rings}</div>
     ${notes.length ? `<p class="sub">${notes.map(esc).join(' ')}</p>` : ''}`;

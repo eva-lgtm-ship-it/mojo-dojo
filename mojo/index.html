@@ -237,12 +237,12 @@ function startSync() {
 async function onSyncMessage(e) {
   if (e.origin !== TIMEBACK || !e.data || e.data.type !== 'mojo-sync') return;
   clearInterval(helloTimer);
-  await runSync(e.data.payload);
+  await runSync(e.data.payload, !!e.data.auto);
 }
-async function runSync(payload) {
+async function runSync(payload, quiet = false) {
   const { data: res, error } = await sb.rpc('mojo_sync', { payload });
   if (error) return toast('Sync failed: ' + error.message, 6000);
-  toast(`Synced ${res.kids} kids, ${res.days} kid-days.`);
+  if (!quiet) toast(`Synced ${res.kids} kids, ${res.days} kid-days. Auto-sync every 10 min while the Timeback tab stays open.`, 5000);
   await refresh();
   if (drawer.classList.contains('open')) openDrawer();
 }

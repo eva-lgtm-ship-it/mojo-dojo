@@ -136,8 +136,15 @@
     el.textContent = msg;
   };
 
+  /* One sync. auto = a repeat run from the 10-minute timer: it only re-reads the last
+     couple of days (the first run already filled in the rest). Returns 'sent', 'copied',
+     'cancelled', 'signed-out' or 'failed'. */
+  const AUTO_MINUTES = 10;
+  const AUTO_DAYS_BACK = 2;
+  const clock = () => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const runOnce = async (auto) => {
   try {
-    toast('Mojo sync: reading your class…');
+    toast(auto ? 'Mojo auto-sync: reading…' : 'Mojo sync: reading your class…');
     await hello;
 
     /* 1. Class + roster */
@@ -185,9 +192,9 @@
     } catch (e) { console.warn('[Mojo sync] enrollments skipped:', e.message); }
 
     /* 3. Per-day, per-subject metrics */
-    const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - DAYS_BACK);
+    const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - (auto ? AUTO_DAYS_BACK : DAYS_BACK));
     /* reach back further when the board asks (e.g. to the start of Mobile Squad), at most 90 days */
-    if (board && board.since) {
+    if (!auto && board && board.since) {
       const [y, mo, d] = board.since.split('-').map(Number);
       const since = new Date(y, mo - 1, d);
       const floor = new Date(); floor.setHours(0, 0, 0, 0); floor.setDate(floor.getDate() - 90);
@@ -277,16 +284,39 @@
     if (board && window.opener) {
       const ok = saved.trusted === board.origin ||
         confirm(`Send ${summary} to the Mojo Dojo board at\n${board.origin}?`);
-      if (!ok) { toast('Mojo sync: cancelled.'); return; }
+      if (!ok) { toast('Mojo sync: cancelled.'); return 'cancelled'; }
       saved.trusted = board.origin; save();
-      window.opener.postMessage({ type: 'mojo-sync', payload }, board.origin);
-      toast(`Mojo sync: sent ${summary}. You can switch back to the board.`);
+      window.opener.postMessage({ type: 'mojo-sync', payload, auto: !!auto }, board.origin);
+      toast(`Mojo sync: sent ${summary} at ${clock()}. Auto-sync every ${AUTO_MINUTES} min while this tab and the board stay open.`);
+      return 'sent';
     } else {
       await navigator.clipboard.writeText(JSON.stringify(payload));
       toast(`Mojo sync: copied ${summary}. On the board, open ⚙ → Paste sync.`);
+      return 'copied';
     }
   } catch (e) {
     console.error('[Mojo sync]', e);
-    toast('Mojo sync failed: ' + e.message + '. Make sure you are signed in to Timeback as a guide.');
+    if (/redirected|sign in/i.test(e.message)) return 'signed-out';
+    toast(`Mojo sync failed at ${clock()}: ` + e.message + (auto ? `. Trying again in ${AUTO_MINUTES} min.` : '. Make sure you are signed in to Timeback as a guide.'));
+    return 'failed';
+  }
+  };
+
+  /* Run now, then every 10 minutes while the board that opened this tab stays open.
+     Running the bookmark again restarts the timer instead of adding a second one. */
+  if (window.__mojoAuto) { clearInterval(window.__mojoAuto); window.__mojoAuto = null; }
+  const stopAuto = (msg) => { clearInterval(window.__mojoAuto); window.__mojoAuto = null; toast(msg); };
+  const first = await runOnce(false);
+  if (first === 'signed-out') toast('Mojo sync: Timeback signed you out. Reload this tab, sign in, and run the bookmark again.');
+  if (first === 'sent') {
+    let busy = false;
+    window.__mojoAuto = setInterval(async () => {
+      if (busy) return;
+      if (!window.opener || window.opener.closed) return stopAuto('Mojo auto-sync stopped: the board tab was closed. Press Sync on the board to start again.');
+      busy = true;
+      const r = await runOnce(true);
+      busy = false;
+      if (r === 'signed-out') stopAuto('Mojo auto-sync stopped: Timeback signed you out. Reload this tab, sign in, and run the bookmark again.');
+    }, AUTO_MINUTES * 60 * 1000);
   }
 })();
